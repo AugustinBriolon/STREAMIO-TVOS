@@ -50,8 +50,13 @@ public final class StremioService: ObservableObject {
         return base
     }
     
-    public func fetchCatalog(type: String) async -> [MediaItem] {
-        let endpoint = "\(cinemetaBase)/catalog/\(type)/top.json"
+    public func fetchCatalog(type: String, genre: String? = nil) async -> [MediaItem] {
+        let endpoint: String
+        if let genre = genre, !genre.isEmpty, let encodedGenre = genre.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            endpoint = "\(cinemetaBase)/catalog/\(type)/top/genre=\(encodedGenre).json"
+        } else {
+            endpoint = "\(cinemetaBase)/catalog/\(type)/top.json"
+        }
         guard let url = URL(string: endpoint) else { return [] }
         
         do {

@@ -7,12 +7,12 @@ public struct RootView: View {
         TabView {
             HomeCatalogView(type: "movie", title: "Films populaires")
                 .tabItem {
-                    Label("Films", systemImage: "film")
+                    Label("Films", systemImage: "film.stack")
                 }
             
             HomeCatalogView(type: "series", title: "Séries populaires")
                 .tabItem {
-                    Label("Séries", systemImage: "tv")
+                    Label("Séries", systemImage: "tv.inset.filled")
                 }
             
             SearchCatalogView()
@@ -22,9 +22,10 @@ public struct RootView: View {
             
             SettingsCatalogView()
                 .tabItem {
-                    Label("Paramètres", systemImage: "gear")
+                    Label("Paramètres", systemImage: "gearshape.fill")
                 }
         }
+        .preferredColorScheme(.dark)
         .onAppear {
             ConfigServer.shared.start()
         }
