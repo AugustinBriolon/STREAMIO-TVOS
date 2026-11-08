@@ -1,0 +1,364 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		12FAAC66F9788C14CE6D6A0C /* SearchCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CB40466B163FC1EC32F199 /* SearchCatalogView.swift */; };
+		210C874D02DFC151337CBBA2 /* HomeCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A511F319549FB5BB0581794F /* HomeCatalogView.swift */; };
+		293182226F91043DD5468EBC /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984A25925A06A14BEC122EA7 /* RootView.swift */; };
+		3BEC3FD1B16AAAABDC27DC0D /* NativePlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85901EBE187924971A6D14D /* NativePlayerView.swift */; };
+		4EAFE5522F81A8C448D80C19 /* StremioModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11128E42B86D0D008CFCAAA2 /* StremioModels.swift */; };
+		5A8AE5A50BC02B7D5C199116 /* StremioTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A73769965D0D2E848A9BAF /* StremioTVApp.swift */; };
+		7C7C08173F0F31F4AD6C2956 /* MediaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E2F29AD8E74BDF2265D82A0 /* MediaDetailView.swift */; };
+		966791C60B0550E5A0E59537 /* ConfigServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4196E621342B21D06CE97826 /* ConfigServer.swift */; };
+		B30151474B362D269986DD75 /* MediaCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6719EDAF68C509D3614ED3F /* MediaCardView.swift */; };
+		BD5E32542066DFBB9202EB93 /* StremioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74C3F2DDFFD5A04B6FA3D612 /* StremioService.swift */; };
+		D012BCE3100D3C6EC25D03C8 /* StreamsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 142A3F75D012F0DA8D25B35B /* StreamsSheetView.swift */; };
+		F4B63C67E331D091ABC2B08F /* SettingsCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F48C9D8657259382A6D4187A /* SettingsCatalogView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		11128E42B86D0D008CFCAAA2 /* StremioModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StremioModels.swift; sourceTree = "<group>"; };
+		142A3F75D012F0DA8D25B35B /* StreamsSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamsSheetView.swift; sourceTree = "<group>"; };
+		14CB40466B163FC1EC32F199 /* SearchCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchCatalogView.swift; sourceTree = "<group>"; };
+		2E2F29AD8E74BDF2265D82A0 /* MediaDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaDetailView.swift; sourceTree = "<group>"; };
+		4196E621342B21D06CE97826 /* ConfigServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigServer.swift; sourceTree = "<group>"; };
+		74C3F2DDFFD5A04B6FA3D612 /* StremioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StremioService.swift; sourceTree = "<group>"; };
+		984A25925A06A14BEC122EA7 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A511F319549FB5BB0581794F /* HomeCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCatalogView.swift; sourceTree = "<group>"; };
+		B6719EDAF68C509D3614ED3F /* MediaCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCardView.swift; sourceTree = "<group>"; };
+		B962B75E3E6D6F04FAA59C9C /* StremioTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StremioTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7A73769965D0D2E848A9BAF /* StremioTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StremioTVApp.swift; sourceTree = "<group>"; };
+		E85901EBE187924971A6D14D /* NativePlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePlayerView.swift; sourceTree = "<group>"; };
+		F48C9D8657259382A6D4187A /* SettingsCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCatalogView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		05E7AFCDE1D97FAA8DCD6A30 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				C7A73769965D0D2E848A9BAF /* StremioTVApp.swift */,
+				6A6179C5E26F750EE2B7A056 /* Models */,
+				CB5C60216E8D3C7A0AE8FD09 /* Services */,
+				203ED6807849188C3DE75DF3 /* Views */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		16D470DEE4FD01C80E9B3510 = {
+			isa = PBXGroup;
+			children = (
+				05E7AFCDE1D97FAA8DCD6A30 /* Sources */,
+				9CC78561228E450FBABD5D2A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		203ED6807849188C3DE75DF3 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A511F319549FB5BB0581794F /* HomeCatalogView.swift */,
+				B6719EDAF68C509D3614ED3F /* MediaCardView.swift */,
+				2E2F29AD8E74BDF2265D82A0 /* MediaDetailView.swift */,
+				E85901EBE187924971A6D14D /* NativePlayerView.swift */,
+				984A25925A06A14BEC122EA7 /* RootView.swift */,
+				14CB40466B163FC1EC32F199 /* SearchCatalogView.swift */,
+				F48C9D8657259382A6D4187A /* SettingsCatalogView.swift */,
+				142A3F75D012F0DA8D25B35B /* StreamsSheetView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		6A6179C5E26F750EE2B7A056 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				11128E42B86D0D008CFCAAA2 /* StremioModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		9CC78561228E450FBABD5D2A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B962B75E3E6D6F04FAA59C9C /* StremioTV.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CB5C60216E8D3C7A0AE8FD09 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				4196E621342B21D06CE97826 /* ConfigServer.swift */,
+				74C3F2DDFFD5A04B6FA3D612 /* StremioService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6F46C83EBDDECAA2EC110D60 /* StremioTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1B8D725331504FD6D4F1AA5 /* Build configuration list for PBXNativeTarget "StremioTV" */;
+			buildPhases = (
+				1B9840FA4F261BD557BC1669 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StremioTV;
+			packageProductDependencies = (
+			);
+			productName = StremioTV;
+			productReference = B962B75E3E6D6F04FAA59C9C /* StremioTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CD78F78819904D51BBE3765C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					6F46C83EBDDECAA2EC110D60 = {
+						DevelopmentTeam = 6X5CP5SFAG;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 6C2436B61591259ACAB0E8BA /* Build configuration list for PBXProject "StremioTV" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 16D470DEE4FD01C80E9B3510;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9CC78561228E450FBABD5D2A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6F46C83EBDDECAA2EC110D60 /* StremioTV */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1B9840FA4F261BD557BC1669 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				966791C60B0550E5A0E59537 /* ConfigServer.swift in Sources */,
+				210C874D02DFC151337CBBA2 /* HomeCatalogView.swift in Sources */,
+				B30151474B362D269986DD75 /* MediaCardView.swift in Sources */,
+				7C7C08173F0F31F4AD6C2956 /* MediaDetailView.swift in Sources */,
+				3BEC3FD1B16AAAABDC27DC0D /* NativePlayerView.swift in Sources */,
+				293182226F91043DD5468EBC /* RootView.swift in Sources */,
+				12FAAC66F9788C14CE6D6A0C /* SearchCatalogView.swift in Sources */,
+				F4B63C67E331D091ABC2B08F /* SettingsCatalogView.swift in Sources */,
+				D012BCE3100D3C6EC25D03C8 /* StreamsSheetView.swift in Sources */,
+				4EAFE5522F81A8C448D80C19 /* StremioModels.swift in Sources */,
+				BD5E32542066DFBB9202EB93 /* StremioService.swift in Sources */,
+				5A8AE5A50BC02B7D5C199116 /* StremioTVApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1CB724FA52748DF6871C54A2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		7C01AA18478487E91878B25D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6X5CP5SFAG;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.h6245.vortxtv;
+				SDKROOT = appletvos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		D135C07D823F31163E6B7F2C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6X5CP5SFAG;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.h6245.vortxtv;
+				SDKROOT = appletvos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		F8D91E3ABA96F3897E14E1BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6C2436B61591259ACAB0E8BA /* Build configuration list for PBXProject "StremioTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1CB724FA52748DF6871C54A2 /* Debug */,
+				F8D91E3ABA96F3897E14E1BF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C1B8D725331504FD6D4F1AA5 /* Build configuration list for PBXNativeTarget "StremioTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7C01AA18478487E91878B25D /* Debug */,
+				D135C07D823F31163E6B7F2C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CD78F78819904D51BBE3765C /* Project object */;
+}

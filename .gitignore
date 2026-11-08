@@ -1,0 +1,17 @@
+# Xcode
+.DS_Store
+*/.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+project.xcworkspace/xcuserdata/
+*.xcuserdatad/
+*.moved-aside
+*.ipa
+*.dSYM.zip
+*.dSYM
+xcuserdata/
+
+# XcodeGen
+# Uncomment if you prefer generating the xcodeproj on demand:
+# *.xcodeproj
