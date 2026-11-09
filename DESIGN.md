@@ -57,7 +57,7 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 
 ## 6. Screens
 
-- **Sidebar** (native `TabView`, `.sidebarAdaptable`): Accueil, Films, Séries, Ma liste, Recherche, Réglages.
+- **Icon rail** (`NavRail`, ADR 0010): Accueil, Films, Séries, Ma liste, Recherche, Réglages. Icons only, no background of any kind, in the left margin; names slide in while the rail has focus (with a soft black gradient behind them), a red mark shows the current page. Menu opens it from a page root; selecting returns focus to the page. Pages cross-fade and keep their state.
 - **Accueil / Films / Séries**: billboard → Reprendre la lecture → Ma liste → Top 10 → trending → genre rows.
 - **Dynamic backdrop**: list pages draw one fixed full-screen backdrop behind the scrolling content. It cross-fades (0.45 s) to the focused title 250 ms after focus settles (`BackdropModel`), is dimmed 30 % under the scrims, and returns to the billboard title when focus goes back to its buttons.
 - **Title page**: hero with logo, meta, synopsis, credits, progress, actions (Lecture/Reprendre, Ma liste, Choisir une source) → seasons chips → episode cards (progress, watched check; long-press for sources) → Titres similaires.

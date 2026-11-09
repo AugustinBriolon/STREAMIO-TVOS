@@ -20,6 +20,7 @@ Native tvOS (Apple TV) Stremio client written in SwiftUI. Target: tvOS 18+, Swif
 - Dependencies are injected through the SwiftUI environment from `StremioTVApp`; services sit behind protocols so tests can stub them.
 - Use `Theme` tokens for colors, spacing, typography — no hardcoded values in features.
 - Playback goes through libVLC (`VLCPlayerEngine`); AVPlayer cannot open the MKV/DTS/PGS files addons return. Diagnose playback issues from raw data (engine state, `ffprobe` on the stream URL), not from addon labels.
+- Navigation is a custom icon rail (ADR 0010): the system sidebar cannot drop its backgrounds. The rail must stay disabled unless requested, or it steals the initial focus.
 - Secrets (addon URLs embed debrid keys) go to the Keychain, never to `UserDefaults` or logs.
 
 ## Commands

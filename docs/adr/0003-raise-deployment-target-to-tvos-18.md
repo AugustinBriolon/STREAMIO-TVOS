@@ -4,7 +4,7 @@ Date: 2026-11-09
 
 ## Status
 
-Accepted
+Accepted. The native sidebar part of the decision is superseded by [ADR-0010](0010-custom-icon-rail-navigation.md); the tvOS 18 target stays.
 
 ## Context
 

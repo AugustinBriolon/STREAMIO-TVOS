@@ -35,7 +35,7 @@ Sources/
 ├── Models/         # Stremio protocol models, stream parsing, load state
 ├── Services/       # StremioService (network), ImagePipeline (decoded, cached artwork), LibraryStore, AddonStore (Keychain),
 │                   # StreamRanker, HTTPRequestParser, ConfigPortal/ConfigServer
-└── Features/       # Root (sidebar), Home, Detail, Streams, Player, Search, MyList, Settings
+└── Features/       # Root (icon rail), Home, Detail, Streams, Player, Search, MyList, Settings
 Tests/StremioTVTests/  # Swift Testing unit tests
 ```
 
@@ -99,7 +99,7 @@ xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPL
 
 Use `-destination "platform=tvOS Simulator,name=Apple TV 4K (3rd generation)"` instead when a tvOS simulator runtime is installed.
 
-There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-swift-testing.md)). Before a release, check on the device: sidebar navigation, billboard and rows, Ma liste add/remove, direct play of an MKV source with picture and subtitles, audio/subtitle menus during playback, seek preview with arrows and with a circular gesture on the clickpad ring (cannot be automated), long-press removal from Reprendre la lecture, resume, "Épisode suivant" near the end of an episode, search, Réglages PIN flow.
+There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-swift-testing.md)). Before a release, check on the device: icon rail navigation (Menu opens it from a page, from the Search keyboard too, Menu on a title page goes back), billboard and rows, Ma liste add/remove, direct play of an MKV source with picture and subtitles, audio/subtitle menus during playback, seek preview with arrows and with a circular gesture on the clickpad ring (cannot be automated), long-press removal from Reprendre la lecture, resume, "Épisode suivant" near the end of an episode, search, Réglages PIN flow.
 
 ## Development
 
