@@ -41,6 +41,7 @@
 		961FB22C5F35BD2B317D7C79 /* ThumbnailPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7856B4BD7945C2C8595F7375 /* ThumbnailPlanTests.swift */; };
 		966791C60B0550E5A0E59537 /* ConfigServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4196E621342B21D06CE97826 /* ConfigServer.swift */; };
 		99C02167B84CDFBD7C3036D9 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F6806519EF5155842EA53 /* DetailView.swift */; };
+		99D2F085D9D1C963B673A4BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 99D52AA8A929A08F97E6CADE /* Assets.xcassets */; };
 		A2E0AC3D61535322AE2182DE /* DynamicBackdrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA870025D067FC2C50D54ED /* DynamicBackdrop.swift */; };
 		A39D299923BC6B6F5037FEBA /* StreamRanker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39BD4D1E2C6EB364A7CE18D9 /* StreamRanker.swift */; };
 		A62CF8312899721B54D4DD0D /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65D0347C319E6E42DE27CCA /* PlaybackCoordinator.swift */; };
@@ -133,6 +134,7 @@
 		9133004FCB63B98A0D603CE9 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		975B3AC9315CCE6719ED4EBA /* HTTPRequestParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPRequestParser.swift; sourceTree = "<group>"; };
 		97CAFF8454DBD1E99F19EC4F /* LoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadState.swift; sourceTree = "<group>"; };
+		99D52AA8A929A08F97E6CADE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9EE486CCF91AA97C8AECA071 /* ThumbnailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailProvider.swift; sourceTree = "<group>"; };
 		A09C0DFF9C6E421FAC8A9107 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A18DF7FA6C07CBA59C993210 /* EpisodeNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeNavigationTests.swift; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 		05E7AFCDE1D97FAA8DCD6A30 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				99D52AA8A929A08F97E6CADE /* Assets.xcassets */,
 				6801FCC066915A0FF9C66FD6 /* App */,
 				8145D8C39DC1EB99CC8EEB2F /* Design */,
 				FCE7DB3E6FDDAA3204E0D339 /* Features */,
@@ -399,6 +402,7 @@
 			buildConfigurationList = C1B8D725331504FD6D4F1AA5 /* Build configuration list for PBXNativeTarget "StremioTV" */;
 			buildPhases = (
 				1B9840FA4F261BD557BC1669 /* Sources */,
+				F96FBD7DE7D60F60325EA078 /* Resources */,
 				AD818E2D69D4D247452FA9FF /* Frameworks */,
 				404368FEB6B394B10CD3867A /* Embed Frameworks */,
 			);
@@ -469,6 +473,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F96FBD7DE7D60F60325EA078 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				99D2F085D9D1C963B673A4BB /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1B9840FA4F261BD557BC1669 /* Sources */ = {
@@ -658,7 +673,7 @@
 		7C01AA18478487E91878B25D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
@@ -682,7 +697,7 @@
 		D135C07D823F31163E6B7F2C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
