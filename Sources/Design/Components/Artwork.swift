@@ -55,6 +55,8 @@ struct LogoTitle: View {
 /// Full-bleed backdrop with the bottom and leading scrims that keep text readable.
 struct BackdropView: View {
     let url: URL?
+    /// Extra black layer so cards drawn over the backdrop stay readable (list pages).
+    var dimming: Double = 0
 
     var body: some View {
         RemoteImage(url: url)
@@ -66,6 +68,7 @@ struct BackdropView: View {
                 LinearGradient(colors: [Theme.Palette.canvas.opacity(0.9), .clear],
                                startPoint: .leading, endPoint: UnitPoint(x: 0.65, y: 0.5))
             }
+            .overlay { Color.black.opacity(dimming) }
             .clipped()
             .accessibilityHidden(true)
     }

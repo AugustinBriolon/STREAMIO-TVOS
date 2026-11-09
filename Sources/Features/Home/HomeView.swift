@@ -7,6 +7,7 @@ struct HomeView: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @FocusState private var focused: String?
     @State private var playOrigin: String?
+    @State private var backdrop = BackdropModel()
 
     init(scope: MediaType?) {
         _model = State(initialValue: HomeViewModel(scope: scope))
@@ -14,9 +15,11 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .background(Theme.Palette.canvas)
-                .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
+            ZStack {
+                DynamicBackdrop(item: backdrop.item ?? model.billboard)
+                content
+            }
+            .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
         }
         .restoresFocusAfterPlayback($focused, to: playOrigin)
         .task { await model.loadIfNeeded() }
@@ -39,7 +42,8 @@ struct HomeView: View {
                             isInMyList: library.isInMyList(billboard.id),
                             onPlay: { play(from: "billboard") { await playback.play(item: billboard) } },
                             onToggleMyList: { library.toggleMyList(billboard) },
-                            playFocus: $focused
+                            playFocus: $focused,
+                            onFocus: { backdrop.focus(nil) }
                         )
                     }
                     rows
@@ -66,7 +70,7 @@ struct HomeView: View {
                         progress: entry.fraction
                     )
                 }
-                .buttonStyle(CardFocusStyle())
+                .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(entry.item) }))
                 .focused($focused, equals: "resume-\(entry.item.id)")
                 // Long press on the clickpad.
                 .contextMenu {
@@ -91,7 +95,7 @@ struct HomeView: View {
                 NavigationLink(value: entry.element) {
                     Top10Card(rank: entry.offset + 1, item: entry.element)
                 }
-                .buttonStyle(CardFocusStyle(showsRing: false))
+                .buttonStyle(CardFocusStyle(showsRing: false, onFocus: { backdrop.focus(entry.element) }))
             }
         }
 
@@ -108,7 +112,7 @@ struct HomeView: View {
     private func posterRow(_ title: String, items: [MediaItem]) -> some View {
         ShelfRow(title, items: items) { item in
             NavigationLink(value: item) { PosterCard(item: item) }
-                .buttonStyle(CardFocusStyle())
+                .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(item) }))
         }
     }
 }

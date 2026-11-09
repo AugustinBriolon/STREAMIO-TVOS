@@ -7,6 +7,7 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 **What the app does:**
 
 - Browses the official Cinemeta catalogs (movies and series): billboard, Top 10, trending and genre rows, search.
+- List pages (Accueil, Films, Séries, Ma liste, Recherche) cross-fade their full-screen background to the backdrop of the focused title.
 - Shows title pages with cast, seasons, episodes (with progress) and similar titles.
 - Queries every configured stream addon in parallel, ranks the results (codec the device decodes, Debrid, best quality the TV can display) and plays the best one directly; a manual source picker remains available.
 - Picks French audio and subtitles automatically from the file's embedded tracks (forced subtitles with French audio, full subtitles otherwise); both can be changed from the player.

@@ -2,17 +2,20 @@ import SwiftUI
 
 /// Artwork card focus: scale up with a white ring, like a 10-foot streaming UI.
 /// Top 10 tiles pass `showsRing: false` so the rank number is not boxed.
+/// `onFocus` fires when the card gains focus (list pages use it to follow the focused title).
 struct CardFocusStyle: ButtonStyle {
     var showsRing = true
+    var onFocus: (() -> Void)?
 
     func makeBody(configuration: Configuration) -> some View {
-        CardFocusBody(configuration: configuration, showsRing: showsRing)
+        CardFocusBody(configuration: configuration, showsRing: showsRing, onFocus: onFocus)
     }
 }
 
 private struct CardFocusBody: View {
     let configuration: ButtonStyleConfiguration
     let showsRing: Bool
+    let onFocus: (() -> Void)?
     @Environment(\.isFocused) private var isFocused
 
     var body: some View {
@@ -25,6 +28,9 @@ private struct CardFocusBody: View {
             .shadow(color: .black.opacity(isFocused ? 0.6 : 0), radius: 18, y: 10)
             .animation(Theme.Motion.focus, value: isFocused)
             .zIndex(isFocused ? 1 : 0)
+            .onChange(of: isFocused) { _, focused in
+                if focused { onFocus?() }
+            }
     }
 }
 
@@ -32,15 +38,17 @@ private struct CardFocusBody: View {
 struct PillButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary }
     var kind: Kind = .secondary
+    var onFocus: (() -> Void)?
 
     func makeBody(configuration: Configuration) -> some View {
-        PillButtonBody(configuration: configuration, kind: kind)
+        PillButtonBody(configuration: configuration, kind: kind, onFocus: onFocus)
     }
 }
 
 private struct PillButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let kind: PillButtonStyle.Kind
+    let onFocus: (() -> Void)?
     @Environment(\.isFocused) private var isFocused
 
     private var highlighted: Bool { kind == .primary || isFocused }
@@ -57,6 +65,9 @@ private struct PillButtonBody: View {
             .scaleEffect(isFocused ? 1.06 : (configuration.isPressed ? 0.97 : 1))
             .shadow(color: .black.opacity(isFocused ? 0.5 : 0), radius: 12, y: 6)
             .animation(Theme.Motion.focus, value: isFocused)
+            .onChange(of: isFocused) { _, focused in
+                if focused { onFocus?() }
+            }
     }
 }
 

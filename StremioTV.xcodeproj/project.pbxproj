@@ -12,6 +12,7 @@
 		08903113D7E1137C8C9A3F1E /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33773047D2FE939EC8FFAE80 /* LibraryStore.swift */; };
 		1B3BD075A3D7A585319C230C /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9133004FCB63B98A0D603CE9 /* ButtonStyles.swift */; };
 		27E1D6D6F4B413A5817989F5 /* SearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A49E7CF09E97EA99687C4A4 /* SearchViewModel.swift */; };
+		2E6B32A805B8D5CCB455367F /* BackdropModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C0EC6F77A8594B65A3E46F8 /* BackdropModelTests.swift */; };
 		2EA8CC75A34B96D700329E8A /* AddonStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B3F69D2CAADB6B14A80772 /* AddonStoreTests.swift */; };
 		333249E9C0913EA70BDC020B /* ScrubberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D95CDCAEA5A2633D9DBCAE7 /* ScrubberTests.swift */; };
 		33C96AD0F51F33B21F911BB4 /* RemoteRingInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC6465B545D5602E2F49B25 /* RemoteRingInput.swift */; };
@@ -37,6 +38,7 @@
 		961FB22C5F35BD2B317D7C79 /* ThumbnailPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7856B4BD7945C2C8595F7375 /* ThumbnailPlanTests.swift */; };
 		966791C60B0550E5A0E59537 /* ConfigServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4196E621342B21D06CE97826 /* ConfigServer.swift */; };
 		99C02167B84CDFBD7C3036D9 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F6806519EF5155842EA53 /* DetailView.swift */; };
+		A2E0AC3D61535322AE2182DE /* DynamicBackdrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA870025D067FC2C50D54ED /* DynamicBackdrop.swift */; };
 		A39D299923BC6B6F5037FEBA /* StreamRanker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39BD4D1E2C6EB364A7CE18D9 /* StreamRanker.swift */; };
 		A62CF8312899721B54D4DD0D /* PlaybackCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65D0347C319E6E42DE27CCA /* PlaybackCoordinator.swift */; };
 		AD3B3BA4640702E20AB0E76B /* BillboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC97E94834C9A0BE45A5B73E /* BillboardView.swift */; };
@@ -89,6 +91,7 @@
 /* Begin PBXFileReference section */
 		0A49E7CF09E97EA99687C4A4 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
 		0BA5C7C70164656ACCEEB704 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		0BA870025D067FC2C50D54ED /* DynamicBackdrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicBackdrop.swift; sourceTree = "<group>"; };
 		0CA5A9D9C88F7BC831001312 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		11128E42B86D0D008CFCAAA2 /* StremioModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StremioModels.swift; sourceTree = "<group>"; };
 		113F6806519EF5155842EA53 /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
@@ -109,6 +112,7 @@
 		6772A2E7F7731C2A80B6F92A /* StateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateView.swift; sourceTree = "<group>"; };
 		67FE45625612823338B2B03B /* ViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModelTests.swift; sourceTree = "<group>"; };
 		6BCE843DC166E3E768882BB8 /* PlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerController.swift; sourceTree = "<group>"; };
+		6C0EC6F77A8594B65A3E46F8 /* BackdropModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackdropModelTests.swift; sourceTree = "<group>"; };
 		740F95F674713869DD574DB9 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
 		74C3F2DDFFD5A04B6FA3D612 /* StremioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StremioService.swift; sourceTree = "<group>"; };
 		7856B4BD7945C2C8595F7375 /* ThumbnailPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailPlanTests.swift; sourceTree = "<group>"; };
@@ -159,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				E2B3F69D2CAADB6B14A80772 /* AddonStoreTests.swift */,
+				6C0EC6F77A8594B65A3E46F8 /* BackdropModelTests.swift */,
 				5EDA275B77478A7527A8738C /* ConfigPortalTests.swift */,
 				A18DF7FA6C07CBA59C993210 /* EpisodeNavigationTests.swift */,
 				907ECDB6B0B97BB42516CF86 /* HTTPRequestParserTests.swift */,
@@ -219,6 +224,7 @@
 				7F7B68EE4F14BD2939929930 /* Artwork.swift */,
 				9133004FCB63B98A0D603CE9 /* ButtonStyles.swift */,
 				1AB08B7C97F33C665141655E /* Cards.swift */,
+				0BA870025D067FC2C50D54ED /* DynamicBackdrop.swift */,
 				353BF0D1804DD3045D7FCFEB /* Labels.swift */,
 				7F64A2FE6B96BEDFB9363834 /* ShelfRow.swift */,
 				6772A2E7F7731C2A80B6F92A /* StateView.swift */,
@@ -460,6 +466,7 @@
 				966791C60B0550E5A0E59537 /* ConfigServer.swift in Sources */,
 				99C02167B84CDFBD7C3036D9 /* DetailView.swift in Sources */,
 				C556DDD0BA42DF1AE141E3F5 /* DetailViewModel.swift in Sources */,
+				A2E0AC3D61535322AE2182DE /* DynamicBackdrop.swift in Sources */,
 				EC94B274A93D2C6919DBB253 /* HTTPRequestParser.swift in Sources */,
 				622504A3773855AD384EA4B3 /* HomeView.swift in Sources */,
 				F357FC4D44EE30F24CC36802 /* HomeViewModel.swift in Sources */,
@@ -497,6 +504,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2EA8CC75A34B96D700329E8A /* AddonStoreTests.swift in Sources */,
+				2E6B32A805B8D5CCB455367F /* BackdropModelTests.swift in Sources */,
 				CE5F567CCAF500EC7D4D2D34 /* ConfigPortalTests.swift in Sources */,
 				5CFCF36471467E37F74BC8B0 /* EpisodeNavigationTests.swift in Sources */,
 				8761C7C50CC62105A4B0BE32 /* HTTPRequestParserTests.swift in Sources */,

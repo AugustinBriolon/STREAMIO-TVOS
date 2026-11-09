@@ -2,10 +2,21 @@ import SwiftUI
 
 struct MyListView: View {
     @Environment(LibraryStore.self) private var library
+    @State private var backdrop = BackdropModel()
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                DynamicBackdrop(item: backdrop.item ?? library.myList.first)
+                list
+            }
+            .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
+        }
+    }
+
+    @ViewBuilder
+    private var list: some View {
+        Group {
                 if library.myList.isEmpty {
                     StateView(kind: .empty(
                         symbol: "plus.rectangle.on.rectangle",
@@ -18,7 +29,7 @@ struct MyListView: View {
                             Text("Ma liste")
                                 .font(Theme.Typography.pageTitle)
                                 .padding(.horizontal, Theme.Spacing.gutter)
-                            PosterGrid(title: nil, items: library.myList)
+                            PosterGrid(title: nil, items: library.myList, onFocus: backdrop.focus)
                         }
                         .padding(.vertical, Theme.Spacing.l)
                     }
@@ -26,8 +37,5 @@ struct MyListView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.Palette.canvas)
-            .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
-        }
     }
 }
