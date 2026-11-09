@@ -20,6 +20,7 @@ final class VLCPlayerEngine: NSObject {
     private(set) var playedSeconds: Double = 0
 
     @ObservationIgnored let videoView = UIView()
+    @ObservationIgnored private(set) var currentURL: URL?
     @ObservationIgnored private let player = VLCMediaPlayer()
     @ObservationIgnored private var lastTimeSample: Double?
 
@@ -33,6 +34,7 @@ final class VLCPlayerEngine: NSObject {
     var hasVideoOutput: Bool { player.hasVideoOut }
 
     func open(_ url: URL, startAt seconds: Double?) {
+        currentURL = url
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=4000")
         if let seconds, seconds > 0 { media.addOption(":start-time=\(Int(seconds))") }
@@ -56,9 +58,13 @@ final class VLCPlayerEngine: NSObject {
         player.isPlaying ? player.pause() : player.play()
     }
 
-    func seek(by seconds: Int) {
+    func play() { player.play() }
+
+    func pause() { if player.isPlaying { player.pause() } }
+
+    func seek(to seconds: Double) {
         guard player.isSeekable else { return }
-        let target = max(0, min(currentTime + Double(seconds), max(duration - 1, 0)))
+        let target = max(0, min(seconds, max(duration - 1, 0)))
         player.time = VLCTime(int: Int32(target * 1000))
         currentTime = target
     }

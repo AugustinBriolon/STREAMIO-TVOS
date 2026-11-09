@@ -1,10 +1,14 @@
 import SwiftUI
 
 /// Full-screen player: libVLC video surface with a 10-foot transport overlay.
-/// Remote: click = play/pause, left/right = -10/+10 s, down = track buttons, Menu = hide controls then close.
+/// Remote: click = play/pause (or confirm a scrub), left/right = scrub preview (accelerates),
+/// circle on the clickpad ring = fast scrub, down = Audio / Sous-titres, Menu = cancel scrub, hide controls, close.
 struct PlayerView: View {
     let session: PlaybackSession
     @State private var controller: PlayerController
+    @State private var thumbnails = ThumbnailProvider()
+    @State private var scrubber = Scrubber()
+    @State private var ring: RemoteRingInput?
     @State private var controlsVisible = true
     @State private var lastInteraction = Date()
     @FocusState private var focus: Focus?
@@ -24,7 +28,7 @@ struct PlayerView: View {
             Color.black.ignoresSafeArea()
             VideoSurface(view: engine.videoView).ignoresSafeArea()
 
-            Button(action: { engine.togglePlayPause(); interact() }) {
+            Button(action: primaryAction) {
                 Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(SurfaceButtonStyle())
@@ -37,7 +41,7 @@ struct PlayerView: View {
                     ? "Chargement de la vidéo…"
                     : "Source illisible, essai de la source \(controller.candidateIndex + 1)…"))
             }
-            if controlsVisible || engine.phase == .paused {
+            if controlsVisible || engine.phase == .paused || scrubber.isActive {
                 controls.transition(.opacity)
             }
         }
@@ -45,32 +49,81 @@ struct PlayerView: View {
         .onAppear {
             controller.load(session)
             focus = .surface
+            ring = RemoteRingInput { radians in jog(radians) }
         }
-        .onChange(of: session.id) { controller.load(session) }
-        .onPlayPauseCommand { engine.togglePlayPause(); interact() }
-        .onExitCommand {
-            if controlsVisible && !surfaceFocused {
-                controlsVisible = false
-                focus = .surface
-            } else {
-                controller.close()
-            }
+        .onDisappear { ring?.stop() }
+        .onChange(of: session.id) {
+            _ = scrubber.cancel()
+            controller.load(session)
         }
+        .onChange(of: engine.currentURL) { thumbnails.reset(url: engine.currentURL) }
+        // Build the preview grid once playback is stable, so it never competes with startup buffering.
+        .onChange(of: engine.playedSeconds >= 20) { _, stable in
+            if stable { thumbnails.startPrefetch(duration: engine.duration, around: engine.currentTime) }
+        }
+        .onPlayPauseCommand(perform: primaryAction)
+        .onExitCommand(perform: handleExit)
         .task(id: lastInteraction) {
-            try? await Task.sleep(for: .seconds(5))
-            if engine.phase == .playing && surfaceFocused { controlsVisible = false }
+            // A newer interaction cancels this task: it must not hide anything then.
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            if engine.phase == .playing && surfaceFocused && !scrubber.isActive { controlsVisible = false }
         }
+    }
+
+    // MARK: Remote
+
+    private func primaryAction() {
+        if let target = scrubber.commit() {
+            engine.seek(to: target)
+            engine.play()
+        } else {
+            engine.togglePlayPause()
+        }
+        interact()
     }
 
     private func handleMove(_ direction: MoveCommandDirection) {
         switch direction {
-        case .left: engine.seek(by: -10)
-        case .right: engine.seek(by: 10)
-        // The surface covers the whole screen, so the focus engine never finds the buttons "below" it.
-        case .down where controlsVisible: focus = .tracks
-        default: break
+        case .left, .right:
+            // Circling the ring also emits arrow moves; the jog already handles that gesture.
+            guard ring?.isRotating != true else { return }
+            scrub { $0.step(forward: direction == .right, current: engine.currentTime, duration: engine.duration) }
+        case .down:
+            // The surface covers the whole screen, so the focus engine never finds the buttons "below" it.
+            focus = .tracks
+            interact()
+        default:
+            interact()
         }
+    }
+
+    private func jog(_ radians: Double) {
+        guard surfaceFocused, engine.duration > 0, engine.phase == .playing || engine.phase == .paused else { return }
+        scrub { $0.jog(radians: radians, current: engine.currentTime, duration: engine.duration) }
+    }
+
+    private func scrub(_ change: (inout Scrubber) -> Void) {
+        guard engine.duration > 0 else { return }
+        if !scrubber.isActive {
+            engine.pause()
+            thumbnails.startPrefetch(duration: engine.duration, around: engine.currentTime)
+        }
+        change(&scrubber)
+        thumbnails.request(time: scrubber.position, duration: engine.duration)
         interact()
+    }
+
+    private func handleExit() {
+        if scrubber.isActive {
+            _ = scrubber.cancel()
+            engine.play()
+            interact()
+        } else if !surfaceFocused {
+            controlsVisible = false
+            focus = .surface
+        } else {
+            controller.close()
+        }
     }
 
     private func interact() {
@@ -79,6 +132,8 @@ struct PlayerView: View {
     }
 
     // MARK: Overlay
+
+    private var displayedTime: Double { scrubber.isActive ? scrubber.position : engine.currentTime }
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
@@ -89,11 +144,22 @@ struct PlayerView: View {
                 }
             }
             Spacer()
+            ScrubBar(
+                playedFraction: engine.duration > 0 ? engine.currentTime / engine.duration : 0,
+                headFraction: engine.duration > 0 ? displayedTime / engine.duration : 0,
+                isScrubbing: scrubber.isActive,
+                preview: thumbnails.image,
+                headLabel: Self.format(displayedTime)
+            )
             HStack(spacing: Theme.Spacing.m) {
-                Image(systemName: engine.phase == .paused ? "play.fill" : "pause.fill").font(.system(size: 28))
-                ProgressBar(fraction: engine.duration > 0 ? engine.currentTime / engine.duration : 0)
-                Text("-" + Self.format(max(engine.duration - engine.currentTime, 0)))
+                Image(systemName: engine.phase == .paused && !scrubber.isActive ? "play.fill" : "pause.fill")
+                    .font(.system(size: 26))
+                Text("\(Self.format(displayedTime)) / \(Self.format(engine.duration))")
                     .font(Theme.Typography.meta)
+                Spacer()
+                Text("-" + Self.format(max(engine.duration - displayedTime, 0)))
+                    .font(Theme.Typography.meta)
+                    .foregroundStyle(Theme.Palette.textSecondary)
             }
             HStack(spacing: Theme.Spacing.m) {
                 trackMenu("Audio", symbol: "speaker.wave.2", tracks: engine.audioTracks,
@@ -107,6 +173,7 @@ struct PlayerView: View {
                 }
             }
             .focusSection()
+            .opacity(scrubber.isActive ? 0 : 1)
         }
         .foregroundStyle(Theme.Palette.textPrimary)
         .padding(.horizontal, Theme.Spacing.gutter)
@@ -145,9 +212,62 @@ struct PlayerView: View {
     }
 
     static func format(_ seconds: Double) -> String {
-        let total = Int(seconds)
+        let total = Int(max(seconds, 0))
         let (hours, minutes, secs) = (total / 3600, total % 3600 / 60, total % 60)
         return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, secs) : String(format: "%d:%02d", minutes, secs)
+    }
+}
+
+/// Progress track with a scrub head; while scrubbing, a frame preview and timestamp float above the head.
+private struct ScrubBar: View {
+    let playedFraction: Double
+    let headFraction: Double
+    let isScrubbing: Bool
+    let preview: CGImage?
+    let headLabel: String
+
+    private static let previewSize = CGSize(width: 384, height: 216)
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let headX = width * min(max(headFraction, 0), 1)
+            ZStack(alignment: .bottomLeading) {
+                Capsule().fill(Theme.Palette.track).frame(height: 6)
+                Capsule().fill(Theme.Palette.accent)
+                    .frame(width: width * min(max(playedFraction, 0), 1), height: 6)
+                Circle().fill(Theme.Palette.accent)
+                    .frame(width: isScrubbing ? 26 : 16, height: isScrubbing ? 26 : 16)
+                    .offset(x: headX - (isScrubbing ? 13 : 8), y: isScrubbing ? 10 : 5)
+                if isScrubbing {
+                    previewCard
+                        .offset(x: min(max(headX - Self.previewSize.width / 2, 0), width - Self.previewSize.width),
+                                y: -30)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+        .frame(height: isScrubbing ? Self.previewSize.height + 90 : 26)
+        .animation(Theme.Motion.focus, value: isScrubbing)
+    }
+
+    private var previewCard: some View {
+        VStack(spacing: Theme.Spacing.xs) {
+            ZStack {
+                Color.black
+                if let preview {
+                    Image(decorative: preview, scale: 1).resizable().scaledToFill()
+                } else {
+                    ProgressView()
+                }
+            }
+            .frame(width: Self.previewSize.width, height: Self.previewSize.height)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .overlay { RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(.white, lineWidth: 3) }
+            Text(headLabel)
+                .font(Theme.Typography.rowTitle.monospacedDigit())
+                .shadow(color: .black, radius: 6)
+        }
     }
 }
 
