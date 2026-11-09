@@ -1,32 +1,76 @@
 import Foundation
 
-public struct CatalogResponse: Codable {
-    public let metas: [MediaItem]
-    
-    public init(metas: [MediaItem]) {
-        self.metas = metas
+public enum MediaType: String, Codable, CaseIterable, Hashable, Sendable {
+    case movie
+    case series
+}
+
+/// Shared artwork resolution for catalog and detail metas.
+public protocol ArtworkProviding {
+    var id: String { get }
+    var poster: String? { get }
+    var background: String? { get }
+    var logo: String? { get }
+}
+
+public extension ArtworkProviding {
+    var posterURL: URL? { poster.flatMap(URL.init(string:)) }
+    var backgroundURL: URL? { background.flatMap(URL.init(string:)) ?? posterURL }
+
+    /// Cinemeta logos live on metahub; derive one for IMDb ids when the meta has none.
+    var logoURL: URL? {
+        if let logo, let url = URL(string: logo) { return url }
+        guard id.hasPrefix("tt") else { return nil }
+        return URL(string: "https://images.metahub.space/logo/medium/\(id)/img")
     }
 }
 
-public struct MediaItem: Codable, Identifiable, Hashable {
+public struct CatalogResponse: Codable {
+    public let metas: [MediaItem]
+}
+
+public struct MediaItem: Codable, Identifiable, Hashable, Sendable, ArtworkProviding {
     public let id: String
     public let name: String
-    public let type: String
+    public let type: MediaType
     public let poster: String?
     public let background: String?
+    public let logo: String?
     public let description: String?
-    public let year: String?
+    public let releaseInfo: String?
+    public let runtime: String?
     public let imdbRating: String?
     public let genres: [String]?
-    
-    public var posterURL: URL? {
-        guard let poster = poster, let url = URL(string: poster) else { return nil }
-        return url
+
+    public init(
+        id: String, name: String, type: MediaType,
+        poster: String? = nil, background: String? = nil, logo: String? = nil,
+        description: String? = nil, releaseInfo: String? = nil, runtime: String? = nil,
+        imdbRating: String? = nil, genres: [String]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.poster = poster
+        self.background = background
+        self.logo = logo
+        self.description = description
+        self.releaseInfo = releaseInfo
+        self.runtime = runtime
+        self.imdbRating = imdbRating
+        self.genres = genres
     }
-    
-    public var backgroundURL: URL? {
-        guard let background = background, let url = URL(string: background) else { return nil }
-        return url
+
+    /// Year, runtime and genres for the "meta line" under a title. Rating is rendered separately.
+    public var metaComponents: [String] {
+        [releaseInfo, runtime, genres?.prefix(2).joined(separator: ", ")]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+    }
+
+    public var displayRating: String? {
+        guard let imdbRating, !imdbRating.isEmpty, imdbRating != "0" else { return nil }
+        return imdbRating
     }
 }
 
@@ -34,34 +78,56 @@ public struct MetaDetailResponse: Codable {
     public let meta: MediaDetail
 }
 
-public struct MediaDetail: Codable, Identifiable {
+public struct MediaDetail: Codable, Identifiable, Sendable, ArtworkProviding {
     public let id: String
     public let name: String
-    public let type: String
+    public let type: MediaType
     public let poster: String?
     public let background: String?
+    public let logo: String?
     public let description: String?
-    public let year: String?
-    public let imdbRating: String?
-    public let genres: [String]?
     public let releaseInfo: String?
     public let runtime: String?
+    public let imdbRating: String?
+    public let genres: [String]?
     public let cast: [String]?
     public let director: [String]?
     public let videos: [VideoItem]?
-    
-    public var posterURL: URL? {
-        guard let poster = poster, let url = URL(string: poster) else { return nil }
-        return url
+
+    public init(
+        id: String, name: String, type: MediaType,
+        poster: String? = nil, background: String? = nil, logo: String? = nil,
+        description: String? = nil, releaseInfo: String? = nil, runtime: String? = nil,
+        imdbRating: String? = nil, genres: [String]? = nil,
+        cast: [String]? = nil, director: [String]? = nil, videos: [VideoItem]? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.poster = poster
+        self.background = background
+        self.logo = logo
+        self.description = description
+        self.releaseInfo = releaseInfo
+        self.runtime = runtime
+        self.imdbRating = imdbRating
+        self.genres = genres
+        self.cast = cast
+        self.director = director
+        self.videos = videos
     }
-    
-    public var backgroundURL: URL? {
-        guard let background = background, let url = URL(string: background) else { return nil }
-        return url
+
+    /// Catalog-level summary, used for library persistence and navigation.
+    public var summary: MediaItem {
+        MediaItem(
+            id: id, name: name, type: type, poster: poster, background: background, logo: logo,
+            description: description, releaseInfo: releaseInfo, runtime: runtime,
+            imdbRating: imdbRating, genres: genres
+        )
     }
 }
 
-public struct VideoItem: Codable, Identifiable, Hashable {
+public struct VideoItem: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String?
     public let season: Int
@@ -70,117 +136,60 @@ public struct VideoItem: Codable, Identifiable, Hashable {
     public let overview: String?
     public let thumbnail: String?
     public let released: String?
-    
-    public var episodeNumber: Int {
-        return number ?? episode ?? 1
+
+    public init(
+        id: String, name: String? = nil, season: Int, number: Int? = nil, episode: Int? = nil,
+        overview: String? = nil, thumbnail: String? = nil, released: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.season = season
+        self.number = number
+        self.episode = episode
+        self.overview = overview
+        self.thumbnail = thumbnail
+        self.released = released
     }
-    
+
+    public var episodeNumber: Int { number ?? episode ?? 1 }
+
+    public var thumbnailURL: URL? { thumbnail.flatMap(URL.init(string:)) }
+
+    public var cleanName: String? {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
+    }
+
     public var displayTitle: String {
-        let epName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let epName = epName, !epName.isEmpty {
-            return "Épisode \(episodeNumber) : \(epName)"
-        }
+        if let cleanName { return "Épisode \(episodeNumber) : \(cleanName)" }
         return "Épisode \(episodeNumber)"
     }
+
+    /// Short code such as "S1:É3".
+    public var code: String { "S\(season):É\(episodeNumber)" }
 }
 
-public struct StreamsResponse: Codable {
-    public let streams: [StreamItem]?
-}
+public extension Array where Element == VideoItem {
+    /// Episodes in watch order; specials (season 0) go last.
+    var inWatchOrder: [VideoItem] {
+        sorted { lhs, rhs in
+            let lhsSeason = lhs.season == 0 ? Int.max : lhs.season
+            let rhsSeason = rhs.season == 0 ? Int.max : rhs.season
+            if lhsSeason != rhsSeason { return lhsSeason < rhsSeason }
+            return lhs.episodeNumber < rhs.episodeNumber
+        }
+    }
 
-public struct StreamItem: Codable, Identifiable, Hashable {
-    public var id: String {
-        return url ?? (title ?? UUID().uuidString)
+    /// Next regular episode after `video`, never jumping into specials.
+    func episode(after video: VideoItem) -> VideoItem? {
+        let ordered = inWatchOrder.filter { $0.season != 0 }
+        guard let index = ordered.firstIndex(where: { $0.id == video.id }) else { return nil }
+        let next = ordered.index(after: index)
+        return next < ordered.endIndex ? ordered[next] : nil
     }
-    
-    public let name: String?
-    public let title: String?
-    public let url: String?
-    
-    public var isDebrid: Bool {
-        let full = "\(name ?? "") \(title ?? "")"
-        return full.contains("RD") || full.contains("Debrid") || full.contains("AD") || full.contains("PM") || full.contains("⚡️")
-    }
-    
-    public var providerName: String {
-        guard let name = name, !name.isEmpty else { return "Addon" }
-        let firstLine = name.components(separatedBy: .newlines).first ?? name
-        return firstLine
-            .replacingOccurrences(of: "[RD+]", with: "")
-            .replacingOccurrences(of: "[RD]", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
-    public var resolution: String {
-        let text = "\(name ?? "") \(title ?? "")"
-        if text.localizedCaseInsensitiveContains("4k") || text.localizedCaseInsensitiveContains("2160p") {
-            if text.localizedCaseInsensitiveContains("hdr") || text.localizedCaseInsensitiveContains("dv") || text.localizedCaseInsensitiveContains("vision") {
-                return "4K HDR"
-            }
-            return "4K UHD"
-        } else if text.localizedCaseInsensitiveContains("1080p") {
-            return "1080p"
-        } else if text.localizedCaseInsensitiveContains("720p") {
-            return "720p"
-        }
-        return "HD"
-    }
-    
-    public var hdrBadge: String? {
-        let text = "\(name ?? "") \(title ?? "")".lowercased()
-        if text.contains("dv") || text.contains("vision") {
-            return "Dolby Vision"
-        } else if text.contains("hdr10+") {
-            return "HDR10+"
-        } else if text.contains("hdr") {
-            return "HDR"
-        }
-        return nil
-    }
-    
-    public var audioBadge: String? {
-        let text = "\(name ?? "") \(title ?? "")".lowercased()
-        if text.contains("atmos") {
-            return "Atmos"
-        } else if text.contains("dts-hd") || text.contains("truehd") {
-            return "TrueHD"
-        } else if text.contains("5.1") {
-            return "5.1"
-        } else if text.contains("7.1") {
-            return "7.1"
-        }
-        return nil
-    }
-    
-    public var sizeInfo: String? {
-        guard let title = title else { return nil }
-        // Match 💾 12.3 GB or 12.3 GB / MB
-        let patterns = ["([0-9]+(\\.[0-9]+)?\\s*(GB|MB|GiB|MiB))"]
-        for p in patterns {
-            if let regex = try? NSRegularExpression(pattern: p, options: .caseInsensitive),
-               let match = regex.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)),
-               let range = Range(match.range, in: title) {
-                return String(title[range])
-            }
-        }
-        return nil
-    }
-    
-    public var seedersInfo: String? {
-        guard let title = title else { return nil }
-        if let regex = try? NSRegularExpression(pattern: "(👥|seeds?:?)\\s*([0-9]+)", options: .caseInsensitive),
-           let match = regex.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)),
-           let range = Range(match.range(at: 2), in: title) {
-            return String(title[range])
-        }
-        return nil
-    }
-    
-    public var parsedTitle: String {
-        if let title = title, !title.isEmpty {
-            let lines = title.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            return lines.first ?? title
-        }
-        return name ?? "Flux vidéo"
+
+    /// First regular episode, or the first special when the show only has specials.
+    var firstEpisode: VideoItem? {
+        inWatchOrder.first { $0.season != 0 } ?? inWatchOrder.first
     }
 }
