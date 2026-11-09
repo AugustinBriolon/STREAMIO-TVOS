@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(ConfigServer.self) private var server
     @State private var manualURL = ""
     @State private var manualError: String?
+    /// The page stays alive when hidden, so the LAN server follows visibility explicitly.
+    let isActive: Bool
 
     var body: some View {
         ScrollView(.vertical) {
@@ -23,8 +25,10 @@ struct SettingsView: View {
         }
         .scrollIndicators(.hidden)
         .background(Theme.Palette.canvas)
-        .onAppear { server.start() }
-        .onDisappear { server.stop() }
+        .onChange(of: isActive, initial: true) { _, active in
+            if active { server.start() } else { server.stop() }
+        }
+        .opensRailOnExit()
     }
 
     private var remoteSection: some View {

@@ -19,6 +19,7 @@ struct HomeView: View {
                 DynamicBackdrop(model: backdrop, fallback: model.billboard)
                 content
             }
+            .opensRailOnExit()
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
         }
         .restoresFocusAfterPlayback($focused, to: playOrigin)

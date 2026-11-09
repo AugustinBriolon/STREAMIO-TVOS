@@ -10,6 +10,7 @@ struct MyListView: View {
                 DynamicBackdrop(model: backdrop, fallback: library.myList.first)
                 list
             }
+            .opensRailOnExit()
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
         }
     }

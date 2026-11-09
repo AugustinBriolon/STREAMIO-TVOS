@@ -3,9 +3,12 @@ import SwiftUI
 struct SearchView: View {
     @State private var model = SearchViewModel()
     @State private var backdrop = BackdropModel()
+    @State private var path = NavigationPath()
+    /// Reports whether the root screen is showing (no title page pushed).
+    @Binding var atRoot: Bool
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 DynamicBackdrop(model: backdrop)
                 ScrollView(.vertical) {
@@ -16,10 +19,12 @@ struct SearchView: View {
                 }
                 .scrollIndicators(.hidden)
             }
+            .opensRailOnExit()
             .searchable(text: $model.query, prompt: "Films, séries…")
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
         }
         .task { await model.loadSuggestions() }
+        .onChange(of: path.count) { _, count in atRoot = count == 0 }
     }
 
     @ViewBuilder
