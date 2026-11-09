@@ -11,12 +11,12 @@ struct PlayerView: View {
     @State private var ring: RemoteRingInput?
     @State private var controlsVisible = true
     @State private var lastInteraction = Date()
-    @FocusState private var focus: Focus?
+    @State private var panel: TrackColumn?
+    @FocusState private var focus: PlayerFocus?
 
-    private enum Focus: Hashable { case surface, tracks }
     private static let controlsBandHeight: CGFloat = 170
-    /// Strict: `nil` means focus is inside a system menu (Audio / Sous-titres), where the player must
-    /// neither hide the controls nor react to remote touches.
+    /// Strict: while the track panel or a button has focus the player must neither hide the controls
+    /// nor react to remote touches.
     private var surfaceFocused: Bool { focus == .surface }
 
     init(session: PlaybackSession, playback: PlaybackCoordinator) {
@@ -36,6 +36,7 @@ struct PlayerView: View {
             }
             .buttonStyle(SurfaceButtonStyle())
             .focused($focus, equals: .surface)
+            .disabled(panel != nil)
             .onMoveCommand(perform: handleMove)
             // Without this the full-screen surface also sits "below" the buttons and steals their focus.
             .padding(.bottom, controlsVisible ? Self.controlsBandHeight : 0)
@@ -49,7 +50,15 @@ struct PlayerView: View {
             if controlsVisible || scrubber.isActive {
                 controls.transition(.opacity)
             }
+            if panel != nil {
+                TrackPanelView(engine: engine, focus: $focus)
+                    .padding(.leading, Theme.Spacing.gutter)
+                    .padding(.bottom, Self.controlsBandHeight + Theme.Spacing.m)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.15), value: panel)
         .animation(.easeOut(duration: 0.2), value: controlsVisible)
         .onAppear {
             controller.load(session)
@@ -105,7 +114,7 @@ struct PlayerView: View {
             lastInteraction = Date()
             Task { @MainActor in
                 await Task.yield()
-                focus = .tracks
+                focus = .audioButton
             }
         default:
             interact()
@@ -130,7 +139,9 @@ struct PlayerView: View {
 
     /// Menu peels one layer: cancel a seek, else hide visible controls, else close the player.
     private func handleExit() {
-        if scrubber.isActive {
+        if panel != nil {
+            closePanel()
+        } else if scrubber.isActive {
             _ = scrubber.cancel()
             engine.play()
             interact()
@@ -140,6 +151,26 @@ struct PlayerView: View {
         } else {
             controller.close()
         }
+    }
+
+    private func openPanel(_ column: TrackColumn) {
+        panel = column
+        controlsVisible = true
+        let tracks = column == .audio ? engine.audioTracks : engine.subtitleTracks
+        let selected = column == .audio ? engine.selectedAudioID : engine.selectedSubtitleID
+        // Subtitles can be off (-1); audio falls back to its first track.
+        let target = tracks.contains { $0.id == selected } || (column == .subtitles && selected < 0)
+            ? selected : tracks.first { $0.id >= 0 }?.id ?? -1
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            focus = column == .audio ? .audioTrack(target) : .subtitleTrack(target)
+        }
+    }
+
+    private func closePanel() {
+        let back: PlayerFocus = panel == .subtitles ? .subtitleButton : .audioButton
+        panel = nil
+        focus = back
     }
 
     private func interact() {
@@ -178,7 +209,14 @@ struct PlayerView: View {
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
             HStack(spacing: Theme.Spacing.m) {
-                TrackMenus(engine: engine, audioFocus: $focus, audioFocusValue: .tracks)
+                Button("Audio", systemImage: "speaker.wave.2") { openPanel(.audio) }
+                    .buttonStyle(PillButtonStyle())
+                    .focused($focus, equals: .audioButton)
+                    .disabled(!hasSelectableTracks(engine.audioTracks))
+                Button("Sous-titres", systemImage: "captions.bubble") { openPanel(.subtitles) }
+                    .buttonStyle(PillButtonStyle())
+                    .focused($focus, equals: .subtitleButton)
+                    .disabled(!hasSelectableTracks(engine.subtitleTracks))
                 if controller.showsNextEpisode, let next = controller.nextEpisode {
                     Button("Épisode suivant · \(next.code)", systemImage: "forward.end.fill") { controller.playNextEpisode() }
                         .buttonStyle(PillButtonStyle(kind: .primary))
@@ -196,6 +234,10 @@ struct PlayerView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
+    }
+
+    private func hasSelectableTracks(_ tracks: [MediaTrack]) -> Bool {
+        tracks.contains { $0.id >= 0 }
     }
 
     static func format(_ seconds: Double) -> String {
@@ -267,46 +309,4 @@ private struct VideoSurface: UIViewRepresentable {
     let view: UIView
     func makeUIView(context: Context) -> UIView { view }
     func updateUIView(_ uiView: UIView, context: Context) {}
-}
-
-
-/// Audio and subtitle menus. A separate view that only reads track state, so playback time ticks
-/// (several per second) never rebuild an open menu, which made it shake and reset its selection.
-private struct TrackMenus<Value: Hashable>: View {
-    let engine: VLCPlayerEngine
-    let audioFocus: FocusState<Value?>.Binding
-    let audioFocusValue: Value
-
-    var body: some View {
-        menu("Audio", symbol: "speaker.wave.2", tracks: engine.audioTracks, selected: engine.selectedAudioID,
-             allowsOff: false) { engine.selectAudio($0) }
-            .focused(audioFocus, equals: audioFocusValue)
-        menu("Sous-titres", symbol: "captions.bubble", tracks: engine.subtitleTracks, selected: engine.selectedSubtitleID,
-             allowsOff: true) { engine.selectSubtitle($0) }
-    }
-
-    private func menu(_ title: String, symbol: String, tracks: [MediaTrack], selected: Int32,
-                      allowsOff: Bool, select: @escaping (Int32) -> Void) -> some View {
-        Menu {
-            if allowsOff {
-                Button { select(-1) } label: { label("Désactivés", isSelected: selected < 0) }
-            }
-            ForEach(tracks.filter { $0.id >= 0 }) { track in
-                Button { select(track.id) } label: { label(track.name, isSelected: track.id == selected) }
-            }
-        } label: {
-            Label(title, systemImage: symbol)
-        }
-        .buttonStyle(PillButtonStyle())
-        .disabled(tracks.filter { $0.id >= 0 }.isEmpty)
-    }
-
-    @ViewBuilder
-    private func label(_ name: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(name, systemImage: "checkmark")
-        } else {
-            Text(name)
-        }
-    }
 }

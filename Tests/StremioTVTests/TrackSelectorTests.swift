@@ -58,3 +58,23 @@ struct TrackSelectorTests {
         #expect(TrackSelector.preferredAudio(tracks)?.id == 2)
     }
 }
+
+/// Names taken from real files returned by the user's addon.
+struct TrackDisplayTests {
+    @Test(arguments: [
+        ("DTS-HD Master Audio 5.1 - Français (VFF) @ 3584 kb/s - [French]", "DTS-HD Master Audio 5.1 - Français (VFF)"),
+        ("EAC3 / Dolby Digital Plus Atmos - Anglais (VO) @ 768 kbps - [English]", "EAC3 / Dolby Digital Plus Atmos - Anglais (VO)"),
+        ("TrueHD Atmos 7.1 - Anglais (VO) @ 3462 kb/s - [English]", "TrueHD Atmos 7.1 - Anglais (VO)"),
+        ("PGS Français (VFF) [Forced] - [French]", "PGS Français (VFF) [Forced]"),
+        ("SRT Anglais [SDH] - [English]", "SRT Anglais [SDH]"),
+        ("English", "English"),
+        ("Track 1 - [French]", "Track 1"),
+    ])
+    func stripsBitrateAndLanguageSuffix(raw: String, expected: String) {
+        #expect(TrackDisplay.title(raw) == expected)
+    }
+
+    @Test func neverReturnsAnEmptyTitle() {
+        #expect(TrackDisplay.title(" - [French]") == " - [French]")
+    }
+}
