@@ -33,7 +33,7 @@ Sources/
 ├── App/            # Entry point, dependency wiring, image cache sizing
 ├── Design/         # Theme tokens + pure components (cards, rows, buttons, states)
 ├── Models/         # Stremio protocol models, stream parsing, load state
-├── Services/       # StremioService (network), LibraryStore, AddonStore (Keychain),
+├── Services/       # StremioService (network), ImagePipeline (decoded, cached artwork), LibraryStore, AddonStore (Keychain),
 │                   # StreamRanker, HTTPRequestParser, ConfigPortal/ConfigServer
 └── Features/       # Root (sidebar), Home, Detail, Streams, Player, Search, MyList, Settings
 Tests/StremioTVTests/  # Swift Testing unit tests

@@ -66,5 +66,12 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 
 ## 7. Motion
 
-- Focus: `easeOut` 0.18 s on scale/ring/shadow. No springs on rows (cheaper on A8, no overshoot while scrolling fast).
-- Images fade in over 0.2 s. "Ma liste" icon swaps with a symbol replace transition.
+Principles (Apple's fluid-interface talks, Emil Kowalski's animation rules, translated to tvOS):
+
+- **Fast and strong ease-out** (`cubic-bezier(0.23, 1, 0.32, 1)`): feedback starts at once and settles gently, never overshoots. Focus changes happen dozens of times a minute, so `Theme.Motion.focus` is 0.2 s; fades and panels 0.25–0.3 s. No `ease-in`, no springs with bounce on navigation.
+- **Retargetable, not scripted**: SwiftUI animations start from the on-screen value, so moving focus twice quickly never jumps. The backdrop fade only ever stacks two layers: it settles an unfinished fade before starting the next.
+- **Only `transform` and `opacity` move**: focus scale, backdrop opacity, panel opacity. Backdrop scrims are baked into the image, so the compositor draws one opaque layer.
+- **Reduce Motion**: cards and buttons keep ring/colour feedback but stop scaling.
+- **Nothing animates that is used constantly without need**: track rows, seek head and list rows react with colour only.
+- **Performance budget (Apple TV HD, A8)**: browsing must stay under ~6 % of frames above 25 ms (measured with an in-app `CADisplayLink` probe, see ADR 0009). Artwork is decoded off the main thread at display size; page backdrops read their own state so a focus change never re-renders the page.
+- Images fade in over 0.3 s only when they were not already cached.
