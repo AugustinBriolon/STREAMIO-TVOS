@@ -4,7 +4,7 @@ Date: 2026-11-09
 
 ## Status
 
-Accepted. Supersedes the native sidebar part of [ADR-0003](0003-raise-deployment-target-to-tvos-18.md).
+Accepted. Supersedes the native sidebar part of [ADR-0003](0003-raise-deployment-target-to-tvos-18.md). The "focusable only on request" rule is superseded by [ADR-0011](0011-rail-reachable-by-moving-left.md).
 
 ## Context
 
