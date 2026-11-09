@@ -66,41 +66,65 @@ struct Scrubber: Equatable {
 }
 
 /// Turns raw Siri Remote clickpad touches (absolute x/y in -1...1) into rotation around the ring.
-/// A rotation only starts after a dead zone, so resting a thumb on the edge or clicking the arrows
-/// (which also touch the ring) never jogs; an angle jump between two samples is a new touch, not motion.
+///
+/// A straight swipe that does not pass through the pad center also sweeps an angle around it, so angle
+/// alone cannot tell a swipe from a circle. A gesture only counts as a jog once it has
+/// 1. rotated by at least `deadZone` (~80°), and
+/// 2. kept a near-constant distance from the center (`maxRadiusSpread`): a straight line gets closest
+///    to the center in the middle of the swipe, an arc does not.
+/// Once a gesture is judged a swipe it stays one until the finger leaves the ring.
 struct RingTracker {
     /// Touches closer to the center than this are swipes/clicks, not ring rotation.
     static let ringRadius = 0.55
     /// Continuous motion between two samples (reported at ~60 Hz) never exceeds this.
     static let maxStep = 0.8
-    /// Rotation needed before a gesture counts as a jog (~17°).
-    static let deadZone = 0.3
+    /// Rotation needed before a gesture counts as a jog.
+    static let deadZone = 1.4
+    /// Largest distance-from-center change allowed for an arc.
+    static let maxRadiusSpread = 0.2
 
     private var lastAngle: Double?
     private var pending = 0.0
+    private var radiusRange: ClosedRange<Double>?
     private var engaged = false
+    private var rejected = false
 
     /// Returns the clockwise rotation (radians) to apply for this sample, or nil.
     mutating func update(x: Double, y: Double) -> Double? {
-        guard (x * x + y * y).squareRoot() >= Self.ringRadius else {
+        let radius = (x * x + y * y).squareRoot()
+        guard radius >= Self.ringRadius else {
             reset()
             return nil
         }
         let angle = atan2(y, x)
         defer { lastAngle = angle }
-        guard let lastAngle else { return nil }
+        guard let lastAngle else {
+            radiusRange = radius...radius
+            return nil
+        }
         var delta = angle - lastAngle
         // Unwrap across the ±π seam.
         if delta > .pi { delta -= 2 * .pi }
         if delta < -.pi { delta += 2 * .pi }
         guard abs(delta) <= Self.maxStep else {
-            pending = 0
-            engaged = false
+            // The finger jumped: this is a new touch, not continuous motion.
+            restartGesture(at: radius)
             return nil
         }
         // atan2 grows counter-clockwise (y up); clockwise must be positive.
         let clockwise = -delta
         if engaged { return clockwise }
+        guard !rejected else { return nil }
+
+        if let range = radiusRange {
+            let widened = min(range.lowerBound, radius)...max(range.upperBound, radius)
+            radiusRange = widened
+            if widened.upperBound - widened.lowerBound > Self.maxRadiusSpread {
+                rejected = true
+                pending = 0
+                return nil
+            }
+        }
         pending += clockwise
         guard abs(pending) >= Self.deadZone else { return nil }
         engaged = true
@@ -110,7 +134,13 @@ struct RingTracker {
 
     mutating func reset() {
         lastAngle = nil
+        restartGesture(at: nil)
+    }
+
+    private mutating func restartGesture(at radius: Double?) {
         pending = 0
         engaged = false
+        rejected = false
+        radiusRange = radius.map { $0...$0 }
     }
 }

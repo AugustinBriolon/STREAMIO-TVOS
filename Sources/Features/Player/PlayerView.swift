@@ -41,7 +41,7 @@ struct PlayerView: View {
                     ? "Chargement de la vidéo…"
                     : "Source illisible, essai de la source \(controller.candidateIndex + 1)…"))
             }
-            if controlsVisible || engine.phase == .paused || scrubber.isActive {
+            if controlsVisible || scrubber.isActive {
                 controls.transition(.opacity)
             }
         }
@@ -89,9 +89,19 @@ struct PlayerView: View {
             guard ring?.isRotating != true else { return }
             scrub { $0.step(forward: direction == .right, current: engine.currentTime, duration: engine.duration) }
         case .down:
+            // A swipe down means "go to the buttons": abandon any seek preview that the same gesture started.
+            if scrubber.isActive {
+                _ = scrubber.cancel()
+                engine.play()
+            }
             // The surface covers the whole screen, so the focus engine never finds the buttons "below" it.
-            focus = .tracks
-            interact()
+            // The buttons may not exist yet (controls hidden): show them first, focus after layout.
+            controlsVisible = true
+            lastInteraction = Date()
+            Task { @MainActor in
+                await Task.yield()
+                focus = .tracks
+            }
         default:
             interact()
         }
@@ -113,12 +123,13 @@ struct PlayerView: View {
         interact()
     }
 
+    /// Menu peels one layer: cancel a seek, else hide visible controls, else close the player.
     private func handleExit() {
         if scrubber.isActive {
             _ = scrubber.cancel()
             engine.play()
             interact()
-        } else if !surfaceFocused {
+        } else if controlsVisible {
             controlsVisible = false
             focus = .surface
         } else {

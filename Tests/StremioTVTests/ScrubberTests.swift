@@ -50,29 +50,57 @@ struct ScrubberTests {
 }
 
 struct RingTrackerTests {
-    /// Samples a clockwise quarter turn on the ring, from top (0, 1) to right (1, 0).
-    @Test func clockwiseRotationIsPositive() {
+    /// Feeds samples and returns the total rotation reported (nil samples count as 0).
+    private func total(_ samples: [(Double, Double)]) -> Double {
         var tracker = RingTracker()
-        var total = 0.0
-        for step in 0...9 {
-            let angle = .pi / 2 - Double(step) * (.pi / 2) / 9
-            total += tracker.update(x: cos(angle) * 0.9, y: sin(angle) * 0.9) ?? 0
+        return samples.reduce(0) { $0 + (tracker.update(x: $1.0, y: $1.1) ?? 0) }
+    }
+
+    /// Clockwise arc at `radius` from `start` over `sweep` radians, 20 samples.
+    private func arc(radius: Double = 0.9, start: Double = .pi / 2, sweep: Double) -> [(Double, Double)] {
+        (0...20).map { step in
+            let angle = start - sweep * Double(step) / 20
+            return (cos(angle) * radius, sin(angle) * radius)
         }
-        #expect(abs(total - .pi / 2) < 0.001)
+    }
+
+    /// Straight vertical swipe at column `x`, finger moving from `top` to `bottom`.
+    private func verticalSwipe(x: Double, top: Double, bottom: Double) -> [(Double, Double)] {
+        (0...20).map { step in (x, top + (bottom - top) * Double(step) / 20) }
+    }
+
+    @Test func clockwiseCircleIsPositive() {
+        #expect(abs(total(arc(sweep: .pi)) - .pi) < 0.35) // loses the dead-zone share of the first samples only
+        #expect(total(arc(sweep: .pi)) > 0)
+    }
+
+    @Test func counterClockwiseCircleIsNegative() {
+        #expect(total(arc(sweep: -.pi)) < 0)
+    }
+
+    /// The bug: a thumb swiping down off-center follows an arc around the pad center.
+    @Test(arguments: [0.6, 0.7, 0.75, 0.8, 0.9])
+    func straightSwipeDownIsNotAJog(x: Double) {
+        let half = (1 - x * x).squareRoot()
+        #expect(total(verticalSwipe(x: x, top: half, bottom: -half)) == 0)
+        #expect(total(verticalSwipe(x: -x, top: half, bottom: -half)) == 0)
+    }
+
+    @Test func straightSwipeOnASquarePadIsNotAJog() {
+        #expect(total(verticalSwipe(x: 0.95, top: 0.9, bottom: -0.9)) == 0)
+        #expect(total(verticalSwipe(x: 0.95, top: -0.9, bottom: 0.9)) == 0)
+    }
+
+    @Test func horizontalSwipeIsNotAJog() {
+        let half = (1 - 0.7 * 0.7).squareRoot()
+        let swipe = (0...20).map { step in (-half + 2 * half * Double(step) / 20, 0.7) }
+        #expect(total(swipe) == 0)
     }
 
     @Test func unwrapsAcrossTheSeam() {
-        var tracker = RingTracker()
-        _ = tracker.update(x: cos(.pi - 0.05), y: sin(.pi - 0.05))
-        let delta = tracker.update(x: cos(-.pi + 0.05), y: sin(-.pi + 0.05))
-        #expect(delta == nil) // inside the dead zone
-        var total = delta ?? 0
-        for step in 1...10 {
-            let angle = -.pi + 0.05 + Double(step) * 0.05
-            total += tracker.update(x: cos(angle), y: sin(angle)) ?? 0
-        }
-        // 0.1 + 0.5 rad counter-clockwise across the seam.
-        #expect(abs(total - -0.6) < 0.0001)
+        // Counter-clockwise half turn that crosses the ±π seam (2.84 rad -> 5.98 rad).
+        let samples = arc(start: .pi - 0.3, sweep: -.pi)
+        #expect(total(samples) < -2.5)
     }
 
     @Test func arrowClicksOnOppositeEdgesAreNotARotation() {
@@ -80,6 +108,13 @@ struct RingTrackerTests {
         _ = tracker.update(x: 1, y: 0)
         #expect(tracker.update(x: -1, y: 0) == nil)
         #expect(tracker.update(x: -1, y: 0) == nil)
+    }
+
+    @Test func centerTouchesAreIgnoredAndResetTheGesture() {
+        var tracker = RingTracker()
+        _ = tracker.update(x: 0.9, y: 0)
+        #expect(tracker.update(x: 0.1, y: 0.1) == nil)
+        #expect(tracker.update(x: 0, y: 0.9) == nil)
     }
 
     @Test func smallWobbleStaysInTheDeadZone() {
@@ -90,10 +125,11 @@ struct RingTrackerTests {
         }
     }
 
-    @Test func centerTouchesAreIgnoredAndResetTheGesture() {
+    @Test func gestureEndsWhenTheFingerLeavesTheRing() {
         var tracker = RingTracker()
-        _ = tracker.update(x: 0.9, y: 0)
-        #expect(tracker.update(x: 0.1, y: 0.1) == nil)
-        #expect(tracker.update(x: 0, y: 0.9) == nil)
+        for sample in arc(sweep: .pi) { _ = tracker.update(x: sample.0, y: sample.1) }
+        _ = tracker.update(x: 0, y: 0)            // lifted / center
+        #expect(tracker.update(x: 0.9, y: 0) == nil) // new touch must re-earn the dead zone
+        #expect(tracker.update(x: 0.9, y: -0.05) == nil)
     }
 }
