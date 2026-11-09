@@ -41,7 +41,8 @@ Tests/StremioTVTests/  # Swift Testing unit tests
 - Views render only; loading and rules live in `@Observable @MainActor` view models and services.
 - `StremioProviding` abstracts the network so view models and the playback coordinator are tested with stubs.
 - `PlaybackCoordinator` turns "Lecture" into a `PlaybackSession` (ranked candidates, resume point, next episode); `PlayerController` drives the libVLC engine (`VLCPlayerEngine`) with candidate fallback, "no picture" detection and default track selection (`TrackSelector`); `PlayerView` is the SwiftUI overlay.
-- Player remote: click = play/pause, left/right = -10/+10 s, down = Audio / Sous-titres menus, Menu = hide controls then close.
+- Player remote: click = play/pause (or confirm a seek), left/right = seek preview that accelerates (10 → 60 s per press), circling the clickpad ring = fast seek, down = Audio / Sous-titres menus, Menu = cancel the seek, then hide controls, then close. Seeking pauses on a preview frame with its timestamp; frames come from a background grid generated during playback (`ThumbnailProvider`), since addons provide no trickplay images.
+- Long press on a "Reprendre la lecture" card: remove it from the row (watched marks are kept) or toggle Ma liste. Focus returns to the card or button that started playback when the player closes.
 - Design tokens and the visual language are described in [DESIGN.md](DESIGN.md). Decisions are recorded in [docs/adr](docs/adr).
 
 ## Getting Started
@@ -89,7 +90,7 @@ Open **Réglages** on the TV, then on a phone or computer on the same Wi-Fi open
 
 ## Tests
 
-Unit tests (Swift Testing) cover stream parsing and ranking (including HEVC on Apple TV HD), default audio/subtitle selection on real track names, the HTTP parser and config portal security, Keychain migration, library/progress rules, episode navigation, playback resolution and view models.
+Unit tests (Swift Testing) cover stream parsing and ranking (including HEVC on Apple TV HD), default audio/subtitle selection on real track names, seek preview/acceleration and clickpad ring rotation math, the preview grid plan, the HTTP parser and config portal security, Keychain migration, library/progress rules, episode navigation, playback resolution and view models.
 
 ```bash
 xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPLE_TV_UDID>" -allowProvisioningUpdates test
@@ -97,7 +98,7 @@ xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPL
 
 Use `-destination "platform=tvOS Simulator,name=Apple TV 4K (3rd generation)"` instead when a tvOS simulator runtime is installed.
 
-There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-swift-testing.md)). Before a release, check on the device: sidebar navigation, billboard and rows, Ma liste add/remove, direct play of an MKV source with picture and subtitles, audio/subtitle menus, resume, "Épisode suivant" near the end of an episode, search, Réglages PIN flow.
+There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-swift-testing.md)). Before a release, check on the device: sidebar navigation, billboard and rows, Ma liste add/remove, direct play of an MKV source with picture and subtitles, audio/subtitle menus during playback, seek preview with arrows and with a circular gesture on the clickpad ring (cannot be automated), long-press removal from Reprendre la lecture, resume, "Épisode suivant" near the end of an episode, search, Réglages PIN flow.
 
 ## Development
 
