@@ -19,11 +19,13 @@ Native tvOS (Apple TV) Stremio client written in SwiftUI. Target: tvOS 18+, Swif
 - Views are pure: data loading and business rules live in view models (`@Observable @MainActor`) or services.
 - Dependencies are injected through the SwiftUI environment from `StremioTVApp`; services sit behind protocols so tests can stub them.
 - Use `Theme` tokens for colors, spacing, typography — no hardcoded values in features.
+- Playback goes through libVLC (`VLCPlayerEngine`); AVPlayer cannot open the MKV/DTS/PGS files addons return. Diagnose playback issues from raw data (engine state, `ffprobe` on the stream URL), not from addon labels.
 - Secrets (addon URLs embed debrid keys) go to the Keychain, never to `UserDefaults` or logs.
 
 ## Commands
 
 ```bash
+./scripts/fetch-vlckit.sh   # once per clone: TVVLCKit into Vendor/ (git-ignored), see ADR 0007
 xcodegen generate
 xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "generic/platform=tvOS Simulator" build-for-testing
 xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPLE_TV_UDID>" -allowProvisioningUpdates test

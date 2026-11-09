@@ -8,7 +8,8 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 
 - Browses the official Cinemeta catalogs (movies and series): billboard, Top 10, trending and genre rows, search.
 - Shows title pages with cast, seasons, episodes (with progress) and similar titles.
-- Queries every configured stream addon in parallel, ranks the results (Debrid first, best quality the TV can display, MP4 before MKV) and plays the best one directly; a manual source picker remains available.
+- Queries every configured stream addon in parallel, ranks the results (codec the device decodes, Debrid, best quality the TV can display) and plays the best one directly; a manual source picker remains available.
+- Picks French audio and subtitles automatically from the file's embedded tracks (forced subtitles with French audio, full subtitles otherwise); both can be changed from the player.
 - Tracks watch progress: "Reprendre la lecture" row, resume position, episode watched at 90 %, "Épisode suivant" action in the player.
 - Keeps "Ma liste" locally.
 - Serves a PIN-protected local web page (port 8080, only while Réglages is open) to paste addon URLs from a phone or computer.
@@ -16,7 +17,7 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 **What it does not do:**
 
 - No Stremio account sync, no torrent engine: torrent-only streams are listed but not playable; use a Debrid addon.
-- No custom video decoder: AVPlayer cannot open Matroska (`.mkv`) files. Direct play falls back to the next candidate (up to 3) when a stream fails.
+- No transcoding: playback uses libVLC (TVVLCKit), which plays MKV, DTS/TrueHD and embedded SRT/PGS subtitles, but 4K HEVC cannot be decoded in real time on an Apple TV HD; such sources are tried last. Direct play falls back to the next candidate (up to 3) on error or when no picture appears.
 
 **Main dependencies:**
 
@@ -39,19 +40,26 @@ Tests/StremioTVTests/  # Swift Testing unit tests
 
 - Views render only; loading and rules live in `@Observable @MainActor` view models and services.
 - `StremioProviding` abstracts the network so view models and the playback coordinator are tested with stubs.
-- `PlaybackCoordinator` turns "Lecture" into a `PlaybackSession` (ranked candidates, resume point, next episode); `PlayerView` drives `AVPlayerViewController`.
+- `PlaybackCoordinator` turns "Lecture" into a `PlaybackSession` (ranked candidates, resume point, next episode); `PlayerController` drives the libVLC engine (`VLCPlayerEngine`) with candidate fallback, "no picture" detection and default track selection (`TrackSelector`); `PlayerView` is the SwiftUI overlay.
+- Player remote: click = play/pause, left/right = -10/+10 s, down = Audio / Sous-titres menus, Menu = hide controls then close.
 - Design tokens and the visual language are described in [DESIGN.md](DESIGN.md). Decisions are recorded in [docs/adr](docs/adr).
 
 ## Getting Started
 
 ### Prerequisites
 
-- macOS with Xcode 26 or later (tvOS 18+ SDK)
+- macOS with Xcode 26 or later (tvOS 18+ SDK), `curl` and `shasum` (preinstalled)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - An Apple TV on tvOS 18+ paired with Xcode (Developer Mode enabled), or a tvOS simulator runtime (`xcodebuild -downloadPlatform tvOS`)
 - An Apple developer team set in `project.yml` (`DEVELOPMENT_TEAM`)
 
-### Generate the project
+### Fetch the playback engine and generate the project
+
+TVVLCKit (official VideoLAN build, ~120 MB, checksum-verified) is downloaded into the git-ignored `Vendor/` folder:
+
+```bash
+./scripts/fetch-vlckit.sh
+```
 
 ```bash
 xcodegen generate
@@ -81,7 +89,7 @@ Open **Réglages** on the TV, then on a phone or computer on the same Wi-Fi open
 
 ## Tests
 
-Unit tests (Swift Testing) cover stream parsing and ranking, the HTTP parser and config portal security, Keychain migration, library/progress rules, episode navigation, playback resolution and view models.
+Unit tests (Swift Testing) cover stream parsing and ranking (including HEVC on Apple TV HD), default audio/subtitle selection on real track names, the HTTP parser and config portal security, Keychain migration, library/progress rules, episode navigation, playback resolution and view models.
 
 ```bash
 xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPLE_TV_UDID>" -allowProvisioningUpdates test
@@ -89,7 +97,7 @@ xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPL
 
 Use `-destination "platform=tvOS Simulator,name=Apple TV 4K (3rd generation)"` instead when a tvOS simulator runtime is installed.
 
-There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-swift-testing.md)). Before a release, check on the device: sidebar navigation, billboard and rows, Ma liste add/remove, direct play and resume, "Épisode suivant" near the end of an episode, search, Réglages PIN flow.
+There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-swift-testing.md)). Before a release, check on the device: sidebar navigation, billboard and rows, Ma liste add/remove, direct play of an MKV source with picture and subtitles, audio/subtitle menus, resume, "Épisode suivant" near the end of an episode, search, Réglages PIN flow.
 
 ## Development
 
@@ -113,5 +121,5 @@ Conventions (also in [.claude/CLAUDE.md](.claude/CLAUDE.md)):
 ## Related documentation
 
 - [DESIGN.md](DESIGN.md) — design system and tvOS interaction rules
-- [docs/adr](docs/adr) — architecture decision records
+- [docs/adr](docs/adr) — architecture decision records ([ADR 0007](docs/adr/0007-libvlc-playback-engine.md): why libVLC instead of AVPlayer)
 - [Stremio addon protocol](https://github.com/Stremio/stremio-addon-sdk/tree/master/docs/protocol)

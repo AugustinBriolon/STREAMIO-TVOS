@@ -60,7 +60,7 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 - **Sidebar** (native `TabView`, `.sidebarAdaptable`): Accueil, Films, Séries, Ma liste, Recherche, Réglages.
 - **Accueil / Films / Séries**: billboard → Reprendre la lecture → Ma liste → Top 10 → trending → genre rows.
 - **Title page**: hero with logo, meta, synopsis, credits, progress, actions (Lecture/Reprendre, Ma liste, Choisir une source) → seasons chips → episode cards (progress, watched check; long-press for sources) → Titres similaires.
-- **Player**: system `AVPlayerViewController` with title/episode metadata; "Épisode suivant" contextual action during the last 60 s.
+- **Player**: libVLC video surface with a custom overlay: title/episode, play state, red progress and remaining time, `Audio` / `Sous-titres` menus (checkmark on the active track) and a primary "Épisode suivant" button during the last 60 s. Controls hide after 5 s of playback without interaction; a source fallback shows "Source illisible, essai de la source N…".
 
 ## 7. Motion
 
