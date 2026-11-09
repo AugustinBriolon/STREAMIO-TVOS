@@ -7,6 +7,7 @@ struct BillboardView: View {
     let isInMyList: Bool
     let onPlay: () -> Void
     let onToggleMyList: () -> Void
+    let playFocus: FocusState<String?>.Binding
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
@@ -24,6 +25,7 @@ struct BillboardView: View {
             HStack(spacing: Theme.Spacing.m) {
                 Button(playTitle, systemImage: "play.fill", action: onPlay)
                     .buttonStyle(PillButtonStyle(kind: .primary))
+                    .focused(playFocus, equals: "billboard")
                 NavigationLink(value: item) {
                     Label("Plus d'infos", systemImage: "info.circle")
                 }

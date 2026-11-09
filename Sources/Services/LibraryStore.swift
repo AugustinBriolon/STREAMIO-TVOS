@@ -93,6 +93,13 @@ public final class LibraryStore {
         persistProgress()
     }
 
+    /// Drops the resume points of a title (including a queued next episode) but keeps finished
+    /// episodes, so "watched" marks survive and the title leaves "Reprendre la lecture".
+    public func removeFromContinueWatching(titleID: String) {
+        progressByID = progressByID.filter { $0.value.item.id != titleID || $0.value.isFinished }
+        persistProgress()
+    }
+
     /// Latest unfinished entry per title, newest first.
     public func continueWatching(type: MediaType? = nil) -> [PlaybackProgress] {
         let latestPerTitle = Dictionary(grouping: progressByID.values, by: \.item.id)

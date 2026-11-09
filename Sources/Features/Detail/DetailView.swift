@@ -7,6 +7,8 @@ struct DetailView: View {
     @State private var pickedStream: (target: SourcePickerTarget, stream: StreamItem)?
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
+    @FocusState private var focused: String?
+    @State private var playOrigin: String?
 
     init(item: MediaItem) {
         _model = State(initialValue: DetailViewModel(item: item))
@@ -40,6 +42,7 @@ struct DetailView: View {
         .ignoresSafeArea(edges: .top)
         .background(Theme.Palette.canvas)
         .task { await model.loadIfNeeded(resumeSeason: resume?.video?.season) }
+        .restoresFocusAfterPlayback($focused, to: playOrigin)
         .sheet(item: $sourcePicker, onDismiss: playPickedStream) { target in
             StreamsView(type: model.item.type, videoID: target.videoID, title: target.title) { stream in
                 pickedStream = (target, stream)
@@ -97,9 +100,11 @@ struct DetailView: View {
     private var actions: some View {
         HStack(spacing: Theme.Spacing.m) {
             Button(resume?.resumeButtonTitle ?? "Lecture", systemImage: "play.fill") {
+                playOrigin = "play"
                 Task { await playback.play(item: model.summary, video: resume?.video, episodes: model.detail?.videos) }
             }
             .buttonStyle(PillButtonStyle(kind: .primary))
+            .focused($focused, equals: "play")
 
             MyListButton(isInMyList: library.isInMyList(model.item.id)) {
                 library.toggleMyList(model.summary)
@@ -145,6 +150,7 @@ struct DetailView: View {
         let watched = progress?.isFinished == true
         return VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Button {
+                playOrigin = "episode-\(episode.id)"
                 Task { await playback.play(item: model.summary, video: episode, episodes: model.episodes) }
             } label: {
                 LandscapeCard(
@@ -164,6 +170,7 @@ struct DetailView: View {
                 }
             }
             .buttonStyle(CardFocusStyle())
+            .focused($focused, equals: "episode-\(episode.id)")
             .contextMenu {
                 Button("Choisir une source", systemImage: "list.bullet") {
                     sourcePicker = SourcePickerTarget(video: episode, videoID: episode.id, title: "\(model.summary.name) · \(episode.code)")

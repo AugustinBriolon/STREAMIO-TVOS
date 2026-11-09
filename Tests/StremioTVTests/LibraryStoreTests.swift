@@ -67,3 +67,21 @@ struct LibraryStoreTests {
         #expect(queued.remainingLabel == nil)
     }
 }
+
+@MainActor
+struct ContinueWatchingRemovalTests {
+    @Test func removingATitleKeepsWatchedEpisodes() {
+        let store = LibraryStore(defaults: makeDefaults(), now: TestClock().now)
+        let series = show("tt1")
+        store.updateProgress(item: series, video: episode(1, 1), position: 2390, duration: 2400)
+        store.queueNextEpisode(item: series, next: episode(1, 2))
+        store.updateProgress(item: movie("m1"), video: nil, position: 600, duration: 6000)
+
+        store.removeFromContinueWatching(titleID: "tt1")
+
+        #expect(store.continueWatching().map(\.item.id) == ["m1"])
+        #expect(store.isWatched("tt1:1:1"))
+        #expect(store.progress(for: "tt1:1:2") == nil)
+        #expect(store.resumeEntry(forTitle: "tt1") == nil)
+    }
+}

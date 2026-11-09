@@ -5,6 +5,8 @@ struct HomeView: View {
     @State private var model: HomeViewModel
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
+    @FocusState private var focused: String?
+    @State private var playOrigin: String?
 
     init(scope: MediaType?) {
         _model = State(initialValue: HomeViewModel(scope: scope))
@@ -16,6 +18,7 @@ struct HomeView: View {
                 .background(Theme.Palette.canvas)
                 .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
         }
+        .restoresFocusAfterPlayback($focused, to: playOrigin)
         .task { await model.loadIfNeeded() }
     }
 
@@ -34,8 +37,9 @@ struct HomeView: View {
                             item: billboard,
                             playTitle: library.resumeEntry(forTitle: billboard.id) == nil ? "Lecture" : "Reprendre",
                             isInMyList: library.isInMyList(billboard.id),
-                            onPlay: { Task { await playback.play(item: billboard) } },
-                            onToggleMyList: { library.toggleMyList(billboard) }
+                            onPlay: { play(from: "billboard") { await playback.play(item: billboard) } },
+                            onToggleMyList: { library.toggleMyList(billboard) },
+                            playFocus: $focused
                         )
                     }
                     rows
@@ -52,7 +56,9 @@ struct HomeView: View {
         let resumable = library.continueWatching(type: model.scope)
         if !resumable.isEmpty {
             ShelfRow("Reprendre la lecture", items: resumable) { entry in
-                Button { Task { await playback.play(item: entry.item, video: entry.video) } } label: {
+                Button {
+                    play(from: "resume-\(entry.item.id)") { await playback.play(item: entry.item, video: entry.video) }
+                } label: {
                     LandscapeCard(
                         imageURL: entry.video?.thumbnailURL ?? entry.item.backgroundURL,
                         title: entry.item.name,
@@ -61,6 +67,17 @@ struct HomeView: View {
                     )
                 }
                 .buttonStyle(CardFocusStyle())
+                .focused($focused, equals: "resume-\(entry.item.id)")
+                // Long press on the clickpad.
+                .contextMenu {
+                    Button("Retirer de Reprendre la lecture", systemImage: "xmark.circle", role: .destructive) {
+                        library.removeFromContinueWatching(titleID: entry.item.id)
+                    }
+                    Button(library.isInMyList(entry.item.id) ? "Retirer de Ma liste" : "Ajouter à Ma liste",
+                           systemImage: library.isInMyList(entry.item.id) ? "checkmark" : "plus") {
+                        library.toggleMyList(entry.item)
+                    }
+                }
             }
         }
 
@@ -81,6 +98,11 @@ struct HomeView: View {
         ForEach(model.shelves) { shelf in
             posterRow(shelf.title, items: shelf.items)
         }
+    }
+
+    private func play(from origin: String, _ start: @escaping () async -> Void) {
+        playOrigin = origin
+        Task { await start() }
     }
 
     private func posterRow(_ title: String, items: [MediaItem]) -> some View {
