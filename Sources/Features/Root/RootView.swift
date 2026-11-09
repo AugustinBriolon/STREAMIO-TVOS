@@ -38,10 +38,13 @@ struct RootView: View {
     @State private var opener = RailOpener()
     /// False while a title page is pushed on Search: there Menu must go back, not open the rail.
     @State private var searchAtRoot = true
-    /// The rail is focusable only while the user asks for it (Menu on a page). Left enabled it is the
-    /// left-most focusable view: it wins the focus at launch (the page is still loading) and after
-    /// a selection. Measured on device: `resetFocus` could not take the focus back from it.
-    @State private var railEnabled = false
+    /// The rail is the left-most focusable view: enabled from the start it wins the focus at launch (the page
+    /// is still loading) and after a selection, and `resetFocus` cannot take it back (measured on device).
+    /// So it becomes focusable once a page element has held focus (`railReady`) and is switched off between
+    /// a selection and the next page focus (`railSuppressed`). From then on moving left from any card reaches it.
+    @State private var railReady = false
+    @State private var railSuppressed = false
+    private var railEnabled: Bool { railReady && !railSuppressed }
     @FocusState private var railFocus: AppTab?
 
     var body: some View {
@@ -65,16 +68,25 @@ struct RootView: View {
         .onExitCommand(perform: railFocus == nil && selected == .search && searchAtRoot ? { opener.open() } : nil)
         .onAppear {
             opener.open = {
-                railEnabled = true
+                railReady = true
+                railSuppressed = false
                 Task { @MainActor in
                     await Task.yield()
                     railFocus = selected
                 }
             }
         }
-        // Focus left the rail (right, or a selection): the page takes it back and the rail goes inert.
-        .onChange(of: railFocus) { _, focused in
-            if focused == nil { railEnabled = false }
+        // Entering the rail from a page lands on the current destination, not on whichever icon is nearest in height.
+        .onChange(of: railFocus) { old, new in
+            guard old == nil, let new, new != selected else { return }
+            railFocus = selected
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIFocusSystem.didUpdateNotification)) { note in
+            // A page element took the focus: the rail may now be reached by moving left.
+            let context = note.userInfo?[UIFocusSystem.focusUpdateContextUserInfoKey] as? UIFocusUpdateContext
+            guard railFocus == nil, context?.nextFocusedItem != nil else { return }
+            railReady = true
+            railSuppressed = false
         }
         .overlay {
             if playback.isResolving {
@@ -145,11 +157,14 @@ struct RootView: View {
         withAnimation(Theme.Motion.fade) { selected = tab }
         // Selecting leaves the rail: disable it, then ask the focus engine to settle on the new page.
         // (Disabling alone leaves the focus on the dead rail until the next key press.)
-        railEnabled = false
+        railSuppressed = true
         railFocus = nil
         Task { @MainActor in
             await Task.yield()
             resetFocus(in: contentScope)
+            // A page with nothing focusable (still loading) must not keep the rail off forever.
+            try? await Task.sleep(for: .seconds(2))
+            railSuppressed = false
         }
     }
 }
