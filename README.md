@@ -32,6 +32,7 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 Sources/
 ├── App/            # Entry point, dependency wiring, image cache sizing
 ├── Design/         # Theme tokens + pure components (cards, rows, buttons, states)
+├── Assets.xcassets/ # Generated icon + Top Shelf images (scripts/generate-brand-assets.swift)
 ├── Models/         # Stremio protocol models, stream parsing, load state
 ├── Services/       # StremioService (network), ImagePipeline (decoded, cached artwork), LibraryStore, AddonStore (Keychain),
 │                   # StreamRanker, HTTPRequestParser, ConfigPortal/ConfigServer
@@ -106,6 +107,7 @@ There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-
 | Task | Command |
 |---|---|
 | Regenerate the Xcode project after adding/removing files | `xcodegen generate` |
+| Regenerate the icon and Top Shelf images (ADR 0013) | `swift scripts/generate-brand-assets.swift` |
 | Compile app and tests without a device | `xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "generic/platform=tvOS Simulator" build-for-testing` |
 
 Conventions (also in [.claude/CLAUDE.md](.claude/CLAUDE.md)):
