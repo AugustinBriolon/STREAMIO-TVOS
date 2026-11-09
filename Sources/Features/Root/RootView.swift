@@ -59,6 +59,8 @@ struct RootView: View {
                 .padding(.leading, Theme.Spacing.l)
                 .ignoresSafeArea(edges: .leading)
                 .disabled(!railEnabled)
+                // Menu inside the rail closes it (the system default would leave the app).
+                .onExitCommand(perform: returnFocusToPage)
         }
         .environment(\.railOpener, opener)
         // The system search keyboard cannot carry its own handler, so on Search's root screen Menu is
@@ -155,8 +157,12 @@ struct RootView: View {
     private func select(_ tab: AppTab) {
         visited.insert(tab)
         withAnimation(Theme.Motion.fade) { selected = tab }
-        // Selecting leaves the rail: disable it, then ask the focus engine to settle on the new page.
-        // (Disabling alone leaves the focus on the dead rail until the next key press.)
+        returnFocusToPage()
+    }
+
+    /// Leaves the rail: disable it, then ask the focus engine to settle on the page.
+    /// (Disabling alone leaves the focus on the dead rail until the next key press.)
+    private func returnFocusToPage() {
         railSuppressed = true
         railFocus = nil
         Task { @MainActor in
