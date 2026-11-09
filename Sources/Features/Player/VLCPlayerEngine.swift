@@ -19,10 +19,13 @@ final class VLCPlayerEngine: NSObject {
     /// Seconds of actual playback since the media opened; used to detect "sound but no picture".
     private(set) var playedSeconds: Double = 0
 
+    /// Called once the engine reports it is playing and the track lists are known.
+    @ObservationIgnored var onPlaying: (() -> Void)?
     @ObservationIgnored let videoView = UIView()
     @ObservationIgnored private(set) var currentURL: URL?
     @ObservationIgnored private let player = VLCMediaPlayer()
     @ObservationIgnored private var lastTimeSample: Double?
+    @ObservationIgnored private var didNotifyPlaying = false
 
     override init() {
         super.init()
@@ -34,6 +37,7 @@ final class VLCPlayerEngine: NSObject {
     var hasVideoOutput: Bool { player.hasVideoOut }
 
     func open(_ url: URL, startAt seconds: Double?) {
+        didNotifyPlaying = false
         currentURL = url
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=4000")
@@ -69,9 +73,21 @@ final class VLCPlayerEngine: NSObject {
         currentTime = target
     }
 
+    /// Switching the audio track makes libVLC drop about 8 video frames while it restarts the decoder
+    /// (measured on Apple TV HD). Doing it while paused turns that stutter into a short, intentional pause.
     func selectAudio(_ id: Int32) {
-        player.currentAudioTrackIndex = id
         selectedAudioID = id
+        guard player.isPlaying else {
+            player.currentAudioTrackIndex = id
+            return
+        }
+        player.pause()
+        player.currentAudioTrackIndex = id
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            // A newer switch schedules its own resume.
+            if selectedAudioID == id { player.play() }
+        }
     }
 
     func selectSubtitle(_ id: Int32) {
@@ -102,7 +118,7 @@ final class VLCPlayerEngine: NSObject {
             if phase == .idle { phase = .opening }
         case .playing:
             phase = .playing
-            refreshTracks()
+            markPlaying()
         case .paused:
             phase = .paused
         case .ended:
@@ -128,7 +144,18 @@ final class VLCPlayerEngine: NSObject {
         if let length = player.media?.length.intValue, length > 0, duration != Double(length) / 1000 {
             duration = Double(length) / 1000
         }
-        if phase == .opening { phase = .playing }
+        if phase == .opening {
+            phase = .playing
+            markPlaying()
+        }
+    }
+
+    /// First moment the media is really playing (VLC says so, or its clock starts moving): tracks are known.
+    private func markPlaying() {
+        refreshTracks()
+        guard !didNotifyPlaying else { return }
+        didNotifyPlaying = true
+        onPlaying?()
     }
 }
 

@@ -41,6 +41,9 @@ final class PlayerController {
         saveProgress(force: true)
         session = newSession
         candidateIndex = 0
+        // Pick the tracks the moment playback starts instead of on the next 1 s tick: every
+        // millisecond of delay is a subtitle line libVLC has already skipped.
+        engine.onPlaying = { [weak self] in self?.applyDefaultTracksIfNeeded() }
         startCandidate(at: newSession.resumePosition)
         monitor?.cancel()
         monitor = Task { [weak self] in
