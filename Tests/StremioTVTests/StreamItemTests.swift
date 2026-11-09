@@ -53,7 +53,8 @@ struct StreamItemTests {
         #expect(item.quality == .fullHD)
         #expect(item.sizeInfo == "2.4 GB")
         #expect(item.seedersInfo == "52")
-        #expect(item.isMatroska)
+        #expect(!item.isHEVC)
+        #expect(stream("A", "Movie.2160p.WEB.H265-POKE.mkv").isHEVC)
         #expect(item.providerName == "Torrentio")
         #expect(item.parsedTitle == "Movie.1080p.mkv")
     }

@@ -16,16 +16,19 @@ struct StreamRankerTests {
         let ranked = StreamRanker.rank([
             stream("[RD+]", "2160p", url: "https://uhd"),
             stream("[RD+]", "1080p", url: "https://fhd"),
-        ], maxQuality: .fullHD)
+        ], device: DeviceCapabilities(maxQuality: .fullHD, decodesHEVC: true))
         #expect(ranked.first?.url == "https://fhd")
     }
 
-    @Test func prefersNonMatroskaAtSameQuality() {
-        let ranked = StreamRanker.rank([
-            stream("[RD+]", "Movie.1080p.mkv", url: "https://mkv"),
-            stream("[RD+]", "Movie.1080p.mp4", url: "https://mp4"),
-        ])
-        #expect(ranked.first?.url == "https://mp4")
+    @Test func avoidsHEVCWhenTheDeviceCannotDecodeIt() {
+        let streams = [
+            stream("4K", "Movie.2160p.HEVC.mkv", url: "https://hevc4k"),
+            stream("1080p", "Movie.1080p.x265.mkv", url: "https://hevc"),
+            stream("1080p", "Movie.1080p.H.264.mkv", url: "https://avc"),
+        ]
+        let appleTVHD = DeviceCapabilities(maxQuality: .fullHD, decodesHEVC: false)
+        #expect(StreamRanker.rank(streams, device: appleTVHD).map(\.url) == ["https://avc", "https://hevc", "https://hevc4k"])
+        #expect(StreamRanker.rank(streams, device: .all).first?.url == "https://hevc4k")
     }
 
     @Test func dedupesAndPushesUnplayableLast() {

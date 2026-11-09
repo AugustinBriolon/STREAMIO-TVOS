@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import UIKit
 
 /// One playback: a title (and episode), the ordered streams to try, and where to resume.
 struct PlaybackSession: Identifiable, Equatable {
@@ -27,18 +26,13 @@ final class PlaybackCoordinator {
     @ObservationIgnored private let service: StremioProviding
     @ObservationIgnored private let addons: AddonStore
     @ObservationIgnored private let library: LibraryStore
-    @ObservationIgnored private let maxQuality: StreamQuality
+    @ObservationIgnored private let device: DeviceCapabilities
 
-    init(service: StremioProviding, addons: AddonStore, library: LibraryStore, maxQuality: StreamQuality? = nil) {
+    init(service: StremioProviding, addons: AddonStore, library: LibraryStore, device: DeviceCapabilities? = nil) {
         self.service = service
         self.addons = addons
         self.library = library
-        self.maxQuality = maxQuality ?? Self.displayMaxQuality
-    }
-
-    /// Apple TV HD outputs 1080p: preferring 4K there only wastes bandwidth and decoding power.
-    static var displayMaxQuality: StreamQuality {
-        UIScreen.main.nativeBounds.height >= 2160 ? .uhd : .fullHD
+        self.device = device ?? .current
     }
 
     /// Plays `video` (or, for a series without one, the resume/first episode). `preferred` comes from the source picker.
@@ -67,7 +61,7 @@ final class PlaybackCoordinator {
             candidates = [preferred]
         } else {
             let streams = await service.fetchStreams(type: item.type, id: videoID, addonBaseURLs: addons.urls)
-            candidates = StreamRanker.playbackCandidates(streams, maxQuality: maxQuality)
+            candidates = StreamRanker.playbackCandidates(streams, device: device)
         }
         guard !candidates.isEmpty else {
             return fail("Aucune source lisible sur Apple TV. Essayez « Choisir une source » ou un addon Debrid.")
@@ -107,3 +101,4 @@ final class PlaybackCoordinator {
         errorMessage = message
     }
 }
+

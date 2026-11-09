@@ -71,7 +71,7 @@ public struct StreamItem: Codable, Identifiable, Hashable, Sendable {
 
     // MARK: Playability
 
-    /// Only direct HTTP(S) links can be handed to AVPlayer.
+    /// Only direct HTTP(S) links can be opened by the player (no torrent engine).
     public var playableURL: URL? {
         guard let url, let parsed = URL(string: url), ["http", "https"].contains(parsed.scheme?.lowercased()) else {
             return nil
@@ -89,8 +89,8 @@ public struct StreamItem: Codable, Identifiable, Hashable, Sendable {
         return "Format de flux non supporté"
     }
 
-    /// AVPlayer cannot open Matroska files; they are tried last.
-    public var isMatroska: Bool { matches(#"\.mkv\b|\bMKV\b"#) }
+    /// HEVC needs a hardware decoder the Apple TV HD does not have.
+    public var isHEVC: Bool { matches(#"\b(HEVC|[xh]\.?265)\b"#) }
 
     // MARK: Badges
 

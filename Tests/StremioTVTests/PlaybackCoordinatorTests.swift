@@ -8,7 +8,7 @@ struct PlaybackCoordinatorTests {
 
     private func makeCoordinator(_ service: StubService, addons urls: [String] = ["https://addon"]) -> PlaybackCoordinator {
         let addons = AddonStore(storage: InMemorySecretStorage(urls), legacyDefaults: makeDefaults())
-        return PlaybackCoordinator(service: service, addons: addons, library: library, maxQuality: .uhd)
+        return PlaybackCoordinator(service: service, addons: addons, library: library, device: .all)
     }
 
     @Test func explainsMissingAddons() async {

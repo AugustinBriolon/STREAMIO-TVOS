@@ -16,7 +16,7 @@ final class StreamsViewModel {
     func load(type: MediaType, videoID: String, addons: [String]) async {
         state = .loading
         let fetched = await service.fetchStreams(type: type, id: videoID, addonBaseURLs: addons)
-        streams = StreamRanker.rank(fetched, maxQuality: PlaybackCoordinator.displayMaxQuality)
+        streams = StreamRanker.rank(fetched, device: .current)
         state = .loaded
     }
 }
@@ -93,7 +93,7 @@ private struct StreamRow: View {
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(Theme.Typography.caption)
                         .foregroundStyle(Theme.Palette.textSecondary)
-                    if stream.isMatroska { Tag(text: "MKV") }
+                    if stream.isHEVC { Tag(text: "HEVC") }
                 }
                 if let reason = stream.unplayableReason {
                     Text(reason).font(Theme.Typography.caption).foregroundStyle(Theme.Palette.accent)

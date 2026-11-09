@@ -1,166 +1,163 @@
-import AVKit
 import SwiftUI
 
-/// Full-screen AVPlayer bound to the current `PlaybackSession`.
-struct PlayerView: UIViewControllerRepresentable {
+/// Full-screen player: libVLC video surface with a 10-foot transport overlay.
+/// Remote: click = play/pause, left/right = -10/+10 s, down = track buttons, Menu = hide controls then close.
+struct PlayerView: View {
     let session: PlaybackSession
-    let playback: PlaybackCoordinator
+    @State private var controller: PlayerController
+    @State private var controlsVisible = true
+    @State private var lastInteraction = Date()
+    @FocusState private var focus: Focus?
 
-    func makeCoordinator() -> PlayerDriver { PlayerDriver(playback: playback) }
+    private enum Focus: Hashable { case surface, tracks }
+    private var surfaceFocused: Bool { focus == .surface || focus == nil }
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
-        controller.player = context.coordinator.player
-        context.coordinator.controller = controller
-        context.coordinator.load(session)
-        return controller
+    init(session: PlaybackSession, playback: PlaybackCoordinator) {
+        self.session = session
+        _controller = State(initialValue: PlayerController(playback: playback))
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        context.coordinator.load(session)
+    private var engine: VLCPlayerEngine { controller.engine }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VideoSurface(view: engine.videoView).ignoresSafeArea()
+
+            Button(action: { engine.togglePlayPause(); interact() }) {
+                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+            }
+            .buttonStyle(SurfaceButtonStyle())
+            .focused($focus, equals: .surface)
+            .onMoveCommand(perform: handleMove)
+            .ignoresSafeArea()
+
+            if engine.phase == .opening {
+                StateView(kind: .loading(controller.candidateIndex == 0
+                    ? "Chargement de la vidéo…"
+                    : "Source illisible, essai de la source \(controller.candidateIndex + 1)…"))
+            }
+            if controlsVisible || engine.phase == .paused {
+                controls.transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: controlsVisible)
+        .onAppear {
+            controller.load(session)
+            focus = .surface
+        }
+        .onChange(of: session.id) { controller.load(session) }
+        .onPlayPauseCommand { engine.togglePlayPause(); interact() }
+        .onExitCommand {
+            if controlsVisible && !surfaceFocused {
+                controlsVisible = false
+                focus = .surface
+            } else {
+                controller.close()
+            }
+        }
+        .task(id: lastInteraction) {
+            try? await Task.sleep(for: .seconds(5))
+            if engine.phase == .playing && surfaceFocused { controlsVisible = false }
+        }
     }
 
-    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: PlayerDriver) {
-        coordinator.teardown()
+    private func handleMove(_ direction: MoveCommandDirection) {
+        switch direction {
+        case .left: engine.seek(by: -10)
+        case .right: engine.seek(by: 10)
+        // The surface covers the whole screen, so the focus engine never finds the buttons "below" it.
+        case .down where controlsVisible: focus = .tracks
+        default: break
+        }
+        interact()
+    }
+
+    private func interact() {
+        controlsVisible = true
+        lastInteraction = Date()
+    }
+
+    // MARK: Overlay
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                Text(session.item.name).font(Theme.Typography.rowTitle)
+                if let subtitle = session.subtitle {
+                    Text(subtitle).font(Theme.Typography.caption).foregroundStyle(Theme.Palette.textSecondary)
+                }
+            }
+            Spacer()
+            HStack(spacing: Theme.Spacing.m) {
+                Image(systemName: engine.phase == .paused ? "play.fill" : "pause.fill").font(.system(size: 28))
+                ProgressBar(fraction: engine.duration > 0 ? engine.currentTime / engine.duration : 0)
+                Text("-" + Self.format(max(engine.duration - engine.currentTime, 0)))
+                    .font(Theme.Typography.meta)
+            }
+            HStack(spacing: Theme.Spacing.m) {
+                trackMenu("Audio", symbol: "speaker.wave.2", tracks: engine.audioTracks,
+                          selected: engine.selectedAudioID, allowsOff: false) { engine.selectAudio($0) }
+                    .focused($focus, equals: .tracks)
+                trackMenu("Sous-titres", symbol: "captions.bubble", tracks: engine.subtitleTracks,
+                          selected: engine.selectedSubtitleID, allowsOff: true) { engine.selectSubtitle($0) }
+                if controller.showsNextEpisode, let next = controller.nextEpisode {
+                    Button("Épisode suivant · \(next.code)", systemImage: "forward.end.fill") { controller.playNextEpisode() }
+                        .buttonStyle(PillButtonStyle(kind: .primary))
+                }
+            }
+            .focusSection()
+        }
+        .foregroundStyle(Theme.Palette.textPrimary)
+        .padding(.horizontal, Theme.Spacing.gutter)
+        .padding(.vertical, Theme.Spacing.xl)
+        .background {
+            LinearGradient(colors: [.black.opacity(0.7), .clear, .clear, .black.opacity(0.85)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func trackMenu(_ title: String, symbol: String, tracks: [MediaTrack], selected: Int32,
+                           allowsOff: Bool, select: @escaping (Int32) -> Void) -> some View {
+        Menu {
+            if allowsOff {
+                Button { select(-1) } label: { trackLabel("Désactivés", isSelected: selected < 0) }
+            }
+            ForEach(tracks.filter { $0.id >= 0 }) { track in
+                Button { select(track.id) } label: { trackLabel(track.name, isSelected: track.id == selected) }
+            }
+        } label: {
+            Label(title, systemImage: symbol)
+        }
+        .buttonStyle(PillButtonStyle())
+        .disabled(tracks.filter { $0.id >= 0 }.isEmpty)
+    }
+
+    @ViewBuilder
+    private func trackLabel(_ name: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(name, systemImage: "checkmark")
+        } else {
+            Text(name)
+        }
+    }
+
+    static func format(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        let (hours, minutes, secs) = (total / 3600, total % 3600 / 60, total % 60)
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, secs) : String(format: "%d:%02d", minutes, secs)
     }
 }
 
-/// Owns the AVPlayer: candidate fallback, resume seek, progress saving and the "next episode" action.
-@MainActor
-final class PlayerDriver: NSObject {
-    let player = AVPlayer()
-    weak var controller: AVPlayerViewController?
+/// The invisible full-screen button that receives remote clicks; it draws nothing on focus.
+private struct SurfaceButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label }
+}
 
-    private let playback: PlaybackCoordinator
-    private var session: PlaybackSession?
-    private var candidateIndex = 0
-    private var lastPosition: Double = 0
-    private var statusObservation: NSKeyValueObservation?
-    private var timeObserver: Any?
-    private var endObserver: NSObjectProtocol?
-    private var ticksSinceSave = 0
-
-    private static let tick: Double = 5
-    private static let saveEveryTicks = 2
-    private static let nextEpisodeLeadTime: Double = 60
-
-    init(playback: PlaybackCoordinator) {
-        self.playback = playback
-        super.init()
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: Self.tick, preferredTimescale: 600), queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.onTick() }
-        }
-        endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] note in
-            MainActor.assumeIsolated { self?.onEnd(note.object as? AVPlayerItem) }
-        }
-    }
-
-    func load(_ newSession: PlaybackSession) {
-        guard newSession.id != session?.id else { return }
-        saveProgress()
-        session = newSession
-        candidateIndex = 0
-        lastPosition = newSession.resumePosition ?? 0
-        controller?.contextualActions = []
-        startCurrentCandidate()
-    }
-
-    func teardown() {
-        saveProgress()
-        player.pause()
-        statusObservation = nil
-        if let timeObserver { player.removeTimeObserver(timeObserver) }
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        timeObserver = nil
-        endObserver = nil
-    }
-
-    private func startCurrentCandidate() {
-        guard let session, candidateIndex < session.candidates.count,
-              let url = session.candidates[candidateIndex].playableURL else {
-            player.replaceCurrentItem(with: nil)
-            playback.playbackFailed()
-            return
-        }
-        let item = AVPlayerItem(url: url)
-        item.externalMetadata = metadata(for: session)
-        statusObservation = item.observe(\.status) { [weak self] item, _ in
-            Task { @MainActor in self?.statusChanged(item) }
-        }
-        player.replaceCurrentItem(with: item)
-        player.play()
-    }
-
-    private func statusChanged(_ item: AVPlayerItem) {
-        guard item === player.currentItem else { return }
-        switch item.status {
-        case .readyToPlay where lastPosition > 0 && player.currentTime().seconds < 1:
-            // Also restores the position when falling back to another source mid-playback.
-            player.seek(to: CMTime(seconds: lastPosition, preferredTimescale: 600))
-        case .failed:
-            candidateIndex += 1
-            startCurrentCandidate()
-        default:
-            break
-        }
-    }
-
-    private func onTick() {
-        guard let item = player.currentItem, item.status == .readyToPlay else { return }
-        lastPosition = player.currentTime().seconds
-        ticksSinceSave += 1
-        if ticksSinceSave >= Self.saveEveryTicks {
-            ticksSinceSave = 0
-            saveProgress()
-        }
-        updateNextEpisodeAction(duration: item.duration.seconds)
-    }
-
-    private func updateNextEpisodeAction(duration: Double) {
-        guard let controller, let next = session?.nextEpisode, duration.isFinite else { return }
-        let nearEnd = duration - lastPosition <= Self.nextEpisodeLeadTime
-        if nearEnd, controller.contextualActions.isEmpty {
-            let action = UIAction(title: "Épisode suivant · \(next.code)", image: UIImage(systemName: "forward.end.fill")) { [weak self] _ in
-                Task { @MainActor in await self?.playback.playNextEpisode() }
-            }
-            controller.contextualActions = [action]
-        } else if !nearEnd, !controller.contextualActions.isEmpty {
-            controller.contextualActions = []
-        }
-    }
-
-    private func onEnd(_ item: AVPlayerItem?) {
-        guard let item, item === player.currentItem else { return }
-        saveProgress()
-        if session?.nextEpisode != nil {
-            Task { await playback.playNextEpisode() }
-        } else {
-            playback.close()
-        }
-    }
-
-    private func saveProgress() {
-        guard let item = player.currentItem, item.status == .readyToPlay else { return }
-        let position = player.currentTime().seconds
-        playback.recordProgress(position: position, duration: item.duration.seconds)
-    }
-
-    private func metadata(for session: PlaybackSession) -> [AVMetadataItem] {
-        var items = [Self.metadataItem(.commonIdentifierTitle, session.item.name)]
-        if let subtitle = session.subtitle {
-            items.append(Self.metadataItem(.iTunesMetadataTrackSubTitle, subtitle))
-        }
-        if let description = session.video?.overview ?? session.item.description {
-            items.append(Self.metadataItem(.commonIdentifierDescription, description))
-        }
-        return items
-    }
-
-    private static func metadataItem(_ identifier: AVMetadataIdentifier, _ value: String) -> AVMetadataItem {
-        let item = AVMutableMetadataItem()
-        item.identifier = identifier
-        item.value = value as NSString
-        item.extendedLanguageTag = "und"
-        return item
-    }
+private struct VideoSurface: UIViewRepresentable {
+    let view: UIView
+    func makeUIView(context: Context) -> UIView { view }
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }
