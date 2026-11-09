@@ -14,7 +14,10 @@ struct PlayerView: View {
     @FocusState private var focus: Focus?
 
     private enum Focus: Hashable { case surface, tracks }
-    private var surfaceFocused: Bool { focus == .surface || focus == nil }
+    private static let controlsBandHeight: CGFloat = 170
+    /// Strict: `nil` means focus is inside a system menu (Audio / Sous-titres), where the player must
+    /// neither hide the controls nor react to remote touches.
+    private var surfaceFocused: Bool { focus == .surface }
 
     init(session: PlaybackSession, playback: PlaybackCoordinator) {
         self.session = session
@@ -34,6 +37,8 @@ struct PlayerView: View {
             .buttonStyle(SurfaceButtonStyle())
             .focused($focus, equals: .surface)
             .onMoveCommand(perform: handleMove)
+            // Without this the full-screen surface also sits "below" the buttons and steals their focus.
+            .padding(.bottom, controlsVisible ? Self.controlsBandHeight : 0)
             .ignoresSafeArea()
 
             if engine.phase == .opening {
@@ -173,11 +178,7 @@ struct PlayerView: View {
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
             HStack(spacing: Theme.Spacing.m) {
-                trackMenu("Audio", symbol: "speaker.wave.2", tracks: engine.audioTracks,
-                          selected: engine.selectedAudioID, allowsOff: false) { engine.selectAudio($0) }
-                    .focused($focus, equals: .tracks)
-                trackMenu("Sous-titres", symbol: "captions.bubble", tracks: engine.subtitleTracks,
-                          selected: engine.selectedSubtitleID, allowsOff: true) { engine.selectSubtitle($0) }
+                TrackMenus(engine: engine, audioFocus: $focus, audioFocusValue: .tracks)
                 if controller.showsNextEpisode, let next = controller.nextEpisode {
                     Button("Épisode suivant · \(next.code)", systemImage: "forward.end.fill") { controller.playNextEpisode() }
                         .buttonStyle(PillButtonStyle(kind: .primary))
@@ -194,31 +195,6 @@ struct PlayerView: View {
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-        }
-    }
-
-    private func trackMenu(_ title: String, symbol: String, tracks: [MediaTrack], selected: Int32,
-                           allowsOff: Bool, select: @escaping (Int32) -> Void) -> some View {
-        Menu {
-            if allowsOff {
-                Button { select(-1) } label: { trackLabel("Désactivés", isSelected: selected < 0) }
-            }
-            ForEach(tracks.filter { $0.id >= 0 }) { track in
-                Button { select(track.id) } label: { trackLabel(track.name, isSelected: track.id == selected) }
-            }
-        } label: {
-            Label(title, systemImage: symbol)
-        }
-        .buttonStyle(PillButtonStyle())
-        .disabled(tracks.filter { $0.id >= 0 }.isEmpty)
-    }
-
-    @ViewBuilder
-    private func trackLabel(_ name: String, isSelected: Bool) -> some View {
-        if isSelected {
-            Label(name, systemImage: "checkmark")
-        } else {
-            Text(name)
         }
     }
 
@@ -291,4 +267,46 @@ private struct VideoSurface: UIViewRepresentable {
     let view: UIView
     func makeUIView(context: Context) -> UIView { view }
     func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+
+/// Audio and subtitle menus. A separate view that only reads track state, so playback time ticks
+/// (several per second) never rebuild an open menu, which made it shake and reset its selection.
+private struct TrackMenus<Value: Hashable>: View {
+    let engine: VLCPlayerEngine
+    let audioFocus: FocusState<Value?>.Binding
+    let audioFocusValue: Value
+
+    var body: some View {
+        menu("Audio", symbol: "speaker.wave.2", tracks: engine.audioTracks, selected: engine.selectedAudioID,
+             allowsOff: false) { engine.selectAudio($0) }
+            .focused(audioFocus, equals: audioFocusValue)
+        menu("Sous-titres", symbol: "captions.bubble", tracks: engine.subtitleTracks, selected: engine.selectedSubtitleID,
+             allowsOff: true) { engine.selectSubtitle($0) }
+    }
+
+    private func menu(_ title: String, symbol: String, tracks: [MediaTrack], selected: Int32,
+                      allowsOff: Bool, select: @escaping (Int32) -> Void) -> some View {
+        Menu {
+            if allowsOff {
+                Button { select(-1) } label: { label("Désactivés", isSelected: selected < 0) }
+            }
+            ForEach(tracks.filter { $0.id >= 0 }) { track in
+                Button { select(track.id) } label: { label(track.name, isSelected: track.id == selected) }
+            }
+        } label: {
+            Label(title, systemImage: symbol)
+        }
+        .buttonStyle(PillButtonStyle())
+        .disabled(tracks.filter { $0.id >= 0 }.isEmpty)
+    }
+
+    @ViewBuilder
+    private func label(_ name: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(name, systemImage: "checkmark")
+        } else {
+            Text(name)
+        }
+    }
 }

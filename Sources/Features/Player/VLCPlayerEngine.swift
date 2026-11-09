@@ -80,10 +80,13 @@ final class VLCPlayerEngine: NSObject {
     }
 
     private func refreshTracks() {
-        audioTracks = Self.tracks(names: player.audioTrackNames, indexes: player.audioTrackIndexes)
-        subtitleTracks = Self.tracks(names: player.videoSubTitlesNames, indexes: player.videoSubTitlesIndexes)
-        selectedAudioID = player.currentAudioTrackIndex
-        selectedSubtitleID = player.currentVideoSubTitleIndex
+        // @Observable notifies on every assignment, even of an equal value: only publish real changes.
+        let audio = Self.tracks(names: player.audioTrackNames, indexes: player.audioTrackIndexes)
+        let subtitles = Self.tracks(names: player.videoSubTitlesNames, indexes: player.videoSubTitlesIndexes)
+        if audio != audioTracks { audioTracks = audio }
+        if subtitles != subtitleTracks { subtitleTracks = subtitles }
+        if selectedAudioID != player.currentAudioTrackIndex { selectedAudioID = player.currentAudioTrackIndex }
+        if selectedSubtitleID != player.currentVideoSubTitleIndex { selectedSubtitleID = player.currentVideoSubTitleIndex }
     }
 
     private static func tracks(names: [Any], indexes: [Any]) -> [MediaTrack] {
@@ -122,7 +125,7 @@ final class VLCPlayerEngine: NSObject {
         }
         lastTimeSample = seconds
         currentTime = seconds
-        if let length = player.media?.length.intValue, length > 0 {
+        if let length = player.media?.length.intValue, length > 0, duration != Double(length) / 1000 {
             duration = Double(length) / 1000
         }
         if phase == .opening { phase = .playing }
