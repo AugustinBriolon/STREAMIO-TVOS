@@ -17,6 +17,7 @@ private struct CardFocusBody: View {
     let showsRing: Bool
     let onFocus: (() -> Void)?
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         configuration.label
@@ -24,7 +25,7 @@ private struct CardFocusBody: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.card)
                     .strokeBorder(Theme.Palette.focusRing, lineWidth: isFocused && showsRing ? 4 : 0)
             }
-            .scaleEffect(isFocused ? Theme.Motion.focusScale : (configuration.isPressed ? 0.97 : 1))
+            .scaleEffect(reduceMotion ? 1 : (isFocused ? Theme.Motion.focusScale : (configuration.isPressed ? 0.97 : 1)))
             .shadow(color: .black.opacity(isFocused ? 0.6 : 0), radius: 18, y: 10)
             .animation(Theme.Motion.focus, value: isFocused)
             .zIndex(isFocused ? 1 : 0)
@@ -51,6 +52,7 @@ private struct PillButtonBody: View {
     let onFocus: (() -> Void)?
     @Environment(\.isFocused) private var isFocused
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var highlighted: Bool { kind == .primary || isFocused }
 
     var body: some View {
@@ -62,7 +64,7 @@ private struct PillButtonBody: View {
             .foregroundStyle(highlighted ? Color.black : Theme.Palette.textPrimary)
             .background(highlighted ? Color.white : Theme.Palette.secondaryButton,
                         in: RoundedRectangle(cornerRadius: Theme.Radius.button))
-            .scaleEffect(isFocused ? 1.06 : (configuration.isPressed ? 0.97 : 1))
+            .scaleEffect(reduceMotion ? 1 : (isFocused ? 1.06 : (configuration.isPressed ? 0.97 : 1)))
             .shadow(color: .black.opacity(isFocused ? 0.5 : 0), radius: 12, y: 6)
             .animation(Theme.Motion.focus, value: isFocused)
             .onChange(of: isFocused) { _, focused in

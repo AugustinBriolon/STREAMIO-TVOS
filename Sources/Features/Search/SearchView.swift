@@ -7,7 +7,7 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DynamicBackdrop(item: backdrop.item)
+                DynamicBackdrop(model: backdrop)
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                         results

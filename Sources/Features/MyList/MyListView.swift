@@ -7,7 +7,7 @@ struct MyListView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DynamicBackdrop(item: backdrop.item ?? library.myList.first)
+                DynamicBackdrop(model: backdrop, fallback: library.myList.first)
                 list
             }
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }

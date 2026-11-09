@@ -16,7 +16,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DynamicBackdrop(item: backdrop.item ?? model.billboard)
+                DynamicBackdrop(model: backdrop, fallback: model.billboard)
                 content
             }
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }

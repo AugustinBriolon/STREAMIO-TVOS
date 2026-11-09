@@ -5,7 +5,7 @@ struct PosterCard: View {
     let item: MediaItem
 
     var body: some View {
-        RemoteImage(url: item.posterURL)
+        RemoteImage(url: item.posterURL, maxPixel: Theme.Card.posterSize.height * Theme.pixelScale)
             .frame(width: Theme.Card.posterSize.width, height: Theme.Card.posterSize.height)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
             .accessibilityLabel(item.name)
@@ -21,7 +21,7 @@ struct LandscapeCard: View {
     var size = Theme.Card.landscapeSize
 
     var body: some View {
-        RemoteImage(url: imageURL)
+        RemoteImage(url: imageURL, maxPixel: size.width * Theme.pixelScale)
             .frame(width: size.width, height: size.height)
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {

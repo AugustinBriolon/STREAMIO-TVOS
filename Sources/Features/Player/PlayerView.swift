@@ -58,8 +58,8 @@ struct PlayerView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: panel)
-        .animation(.easeOut(duration: 0.2), value: controlsVisible)
+        .animation(Theme.Motion.panel, value: panel)
+        .animation(Theme.Motion.fade, value: controlsVisible)
         .onAppear {
             controller.load(session)
             focus = .surface

@@ -55,9 +55,16 @@ enum Theme {
         static let episodeSize = CGSize(width: 360, height: 202)
     }
 
+    /// Pixels per point of the current output (2 on a 4K Apple TV, 1 on 1080p).
+    @MainActor static var pixelScale: CGFloat { UIScreen.main.scale }
+
+    /// Strong ease-out (starts fast, settles gently): feedback is felt at once and never overshoots.
+    /// Focus moves happen dozens of times a minute, so they stay short.
     enum Motion {
         static let focusScale: CGFloat = 1.08
-        static let focus = Animation.easeOut(duration: 0.18)
+        static let focus = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
+        static let fade = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.3)
+        static let panel = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.25)
     }
 
     enum Layout {

@@ -79,6 +79,23 @@ final class HomeViewModel {
         shelves = rows
         billboard = Self.pickBillboard(from: top.isEmpty ? rows.first?.items ?? [] : top)
         state = .loaded
+        prefetchArtwork(top10: top10, shelves: shelves)
+    }
+
+    /// Decodes the first posters of every row (and the billboard backdrop) before the user scrolls there.
+    private func prefetchArtwork(top10: [MediaItem], shelves: [Shelf]) {
+        let posters = (top10 + shelves.flatMap { $0.items.prefix(10) }).compactMap(\.posterURL)
+        let pixel = Theme.Card.posterSize.height * Theme.pixelScale
+        let backdrop = billboard.flatMap(\.backgroundURL)
+        Task(priority: .utility) {
+            if let backdrop { _ = await ImagePipeline.shared.backdrop(for: backdrop, dimming: 0.3) }
+            await ImagePipeline.shared.prefetch(Self.unique(posters), maxPixel: pixel)
+        }
+    }
+
+    static func unique(_ urls: [URL]) -> [URL] {
+        var seen = Set<URL>()
+        return urls.filter { seen.insert($0).inserted }
     }
 
     /// The most popular title that has artwork and a synopsis to show.
