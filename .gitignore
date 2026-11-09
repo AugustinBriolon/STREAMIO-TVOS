@@ -15,3 +15,9 @@ xcuserdata/
 # XcodeGen
 # Uncomment if you prefer generating the xcodeproj on demand:
 # *.xcodeproj
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Third-party binaries fetched by scripts/fetch-vlckit.sh
+Vendor/

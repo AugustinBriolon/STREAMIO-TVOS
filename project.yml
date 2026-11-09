@@ -13,6 +13,10 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: Sources
+    dependencies:
+      # Fetched by scripts/fetch-vlckit.sh (ADR 0007).
+      - framework: Vendor/TVVLCKit.xcframework
+        embed: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.h6245.vortxtv
       GENERATE_INFOPLIST_FILE: YES

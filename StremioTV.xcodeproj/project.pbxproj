@@ -14,7 +14,9 @@
 		2EA8CC75A34B96D700329E8A /* AddonStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B3F69D2CAADB6B14A80772 /* AddonStoreTests.swift */; };
 		365D6E8275F2AB1A91C9026E /* AddonStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BB95187319419128D64F7D5 /* AddonStore.swift */; };
 		3A2D2508B198E8B739F6FB2B /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA5A9D9C88F7BC831001312 /* TestSupport.swift */; };
+		3E8CE2B25C9198FBEDB0BA88 /* TVVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A4B3E7A8B412E07CDF8C8983 /* TVVLCKit.xcframework */; };
 		3F00970F365BC06F9869E27F /* StremioTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163AD7B74090E94DDC031A12 /* StremioTVApp.swift */; };
+		42755F20077B1245FC752ED2 /* TrackSelectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C65EFC384BD3A195DEEEFA60 /* TrackSelectorTests.swift */; };
 		430AA6AB80BAE891107E7E40 /* StreamItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF4ABABF3C4C1A466F81727D /* StreamItem.swift */; };
 		4B1A32D292DAE7453D3FD058 /* LibraryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9E29A1E4FCB43B7F702C3D /* LibraryStoreTests.swift */; };
 		4E8385DE1716B2A62973C984 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB88F8B866FD439EC84FFA2D /* Theme.swift */; };
@@ -22,6 +24,7 @@
 		5CFCF36471467E37F74BC8B0 /* EpisodeNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18DF7FA6C07CBA59C993210 /* EpisodeNavigationTests.swift */; };
 		5EDABF788BF00F101A202349 /* StreamRankerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CC49F20DB827613E36623B /* StreamRankerTests.swift */; };
 		622504A3773855AD384EA4B3 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA5C7C70164656ACCEEB704 /* HomeView.swift */; };
+		671C9DCE5B161DC24402529E /* TrackSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4882A08629AEB5C763903E /* TrackSelector.swift */; };
 		6AC7F4D0FF6BA453C2874778 /* StateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6772A2E7F7731C2A80B6F92A /* StateView.swift */; };
 		6F281F3A2D32B3CBDDF6EE76 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7E5AA3C635EABB032A59D97 /* RootView.swift */; };
 		81F64847F08599741F508E34 /* Artwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B68EE4F14BD2939929930 /* Artwork.swift */; };
@@ -42,7 +45,10 @@
 		CE5F567CCAF500EC7D4D2D34 /* ConfigPortalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EDA275B77478A7527A8738C /* ConfigPortalTests.swift */; };
 		D2432984F4B487E25F0237D9 /* StreamItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F405844154BAA30E00E6384B /* StreamItemTests.swift */; };
 		D2DE6D72DE021D4317D734C2 /* LoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97CAFF8454DBD1E99F19EC4F /* LoadState.swift */; };
+		D2FC875F3F5F5C389057E082 /* PlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCE843DC166E3E768882BB8 /* PlayerController.swift */; };
 		D69ED361AB63446003BC3AC2 /* MyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA543D161A43A2836009704 /* MyListView.swift */; };
+		E778B8A701627523E0BDFC79 /* TVVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A4B3E7A8B412E07CDF8C8983 /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		EA5D3FA44CFFE6C8111EDE6F /* VLCPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499DDE84B78B133311092512 /* VLCPlayerEngine.swift */; };
 		EC94B274A93D2C6919DBB253 /* HTTPRequestParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 975B3AC9315CCE6719ED4EBA /* HTTPRequestParser.swift */; };
 		F357FC4D44EE30F24CC36802 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 740F95F674713869DD574DB9 /* HomeViewModel.swift */; };
 		F535F62FC3B5F93DBB4AB9C5 /* PlaybackCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA96F340F644387158C676FC /* PlaybackCoordinatorTests.swift */; };
@@ -60,6 +66,20 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		404368FEB6B394B10CD3867A /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E778B8A701627523E0BDFC79 /* TVVLCKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0A49E7CF09E97EA99687C4A4 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
 		0BA5C7C70164656ACCEEB704 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -74,22 +94,27 @@
 		39BD4D1E2C6EB364A7CE18D9 /* StreamRanker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamRanker.swift; sourceTree = "<group>"; };
 		3BB95187319419128D64F7D5 /* AddonStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonStore.swift; sourceTree = "<group>"; };
 		4196E621342B21D06CE97826 /* ConfigServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigServer.swift; sourceTree = "<group>"; };
+		499DDE84B78B133311092512 /* VLCPlayerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCPlayerEngine.swift; sourceTree = "<group>"; };
 		5EDA275B77478A7527A8738C /* ConfigPortalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigPortalTests.swift; sourceTree = "<group>"; };
 		6772A2E7F7731C2A80B6F92A /* StateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateView.swift; sourceTree = "<group>"; };
 		67FE45625612823338B2B03B /* ViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModelTests.swift; sourceTree = "<group>"; };
+		6BCE843DC166E3E768882BB8 /* PlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerController.swift; sourceTree = "<group>"; };
 		740F95F674713869DD574DB9 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
 		74C3F2DDFFD5A04B6FA3D612 /* StremioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StremioService.swift; sourceTree = "<group>"; };
 		7F64A2FE6B96BEDFB9363834 /* ShelfRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfRow.swift; sourceTree = "<group>"; };
 		7F7B68EE4F14BD2939929930 /* Artwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Artwork.swift; sourceTree = "<group>"; };
+		8A4882A08629AEB5C763903E /* TrackSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackSelector.swift; sourceTree = "<group>"; };
 		907ECDB6B0B97BB42516CF86 /* HTTPRequestParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPRequestParserTests.swift; sourceTree = "<group>"; };
 		9133004FCB63B98A0D603CE9 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		975B3AC9315CCE6719ED4EBA /* HTTPRequestParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPRequestParser.swift; sourceTree = "<group>"; };
 		97CAFF8454DBD1E99F19EC4F /* LoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadState.swift; sourceTree = "<group>"; };
 		A09C0DFF9C6E421FAC8A9107 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A18DF7FA6C07CBA59C993210 /* EpisodeNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeNavigationTests.swift; sourceTree = "<group>"; };
+		A4B3E7A8B412E07CDF8C8983 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Vendor/TVVLCKit.xcframework; sourceTree = "<group>"; };
 		ADA543D161A43A2836009704 /* MyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyListView.swift; sourceTree = "<group>"; };
 		B4EF31D09D86030F7C22D5A9 /* StreamsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamsView.swift; sourceTree = "<group>"; };
 		B962B75E3E6D6F04FAA59C9C /* StremioTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StremioTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C65EFC384BD3A195DEEEFA60 /* TrackSelectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackSelectorTests.swift; sourceTree = "<group>"; };
 		C6C11AF1DC3299B8A72A346A /* StremioTVTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StremioTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C70DCAEE7DEEA088617061F7 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		CC97E94834C9A0BE45A5B73E /* BillboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillboardView.swift; sourceTree = "<group>"; };
@@ -106,6 +131,17 @@
 		FF4ABABF3C4C1A466F81727D /* StreamItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamItem.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		AD818E2D69D4D247452FA9FF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E8CE2B25C9198FBEDB0BA88 /* TVVLCKit.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		00EBAAD722CB391198629B4D /* StremioTVTests */ = {
 			isa = PBXGroup;
@@ -119,6 +155,7 @@
 				F405844154BAA30E00E6384B /* StreamItemTests.swift */,
 				D3CC49F20DB827613E36623B /* StreamRankerTests.swift */,
 				0CA5A9D9C88F7BC831001312 /* TestSupport.swift */,
+				C65EFC384BD3A195DEEEFA60 /* TrackSelectorTests.swift */,
 				67FE45625612823338B2B03B /* ViewModelTests.swift */,
 			);
 			path = StremioTVTests;
@@ -136,6 +173,14 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		150DDF68E9E1D67970A023AB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A4B3E7A8B412E07CDF8C8983 /* TVVLCKit.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		15DEAEB3F337EA1C1FA6B274 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -149,6 +194,7 @@
 			children = (
 				05E7AFCDE1D97FAA8DCD6A30 /* Sources */,
 				15DEAEB3F337EA1C1FA6B274 /* Tests */,
+				150DDF68E9E1D67970A023AB /* Frameworks */,
 				9CC78561228E450FBABD5D2A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -257,7 +303,10 @@
 			isa = PBXGroup;
 			children = (
 				F65D0347C319E6E42DE27CCA /* PlaybackCoordinator.swift */,
+				6BCE843DC166E3E768882BB8 /* PlayerController.swift */,
 				D4206F1D92DD12CC6D881E3F /* PlayerView.swift */,
+				8A4882A08629AEB5C763903E /* TrackSelector.swift */,
+				499DDE84B78B133311092512 /* VLCPlayerEngine.swift */,
 			);
 			path = Player;
 			sourceTree = "<group>";
@@ -308,6 +357,8 @@
 			buildConfigurationList = C1B8D725331504FD6D4F1AA5 /* Build configuration list for PBXNativeTarget "StremioTV" */;
 			buildPhases = (
 				1B9840FA4F261BD557BC1669 /* Sources */,
+				AD818E2D69D4D247452FA9FF /* Frameworks */,
+				404368FEB6B394B10CD3867A /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -399,6 +450,7 @@
 				D2DE6D72DE021D4317D734C2 /* LoadState.swift in Sources */,
 				D69ED361AB63446003BC3AC2 /* MyListView.swift in Sources */,
 				A62CF8312899721B54D4DD0D /* PlaybackCoordinator.swift in Sources */,
+				D2FC875F3F5F5C389057E082 /* PlayerController.swift in Sources */,
 				BECE8392B8A886B29CA8CF27 /* PlayerView.swift in Sources */,
 				6F281F3A2D32B3CBDDF6EE76 /* RootView.swift in Sources */,
 				F569842CFB6CEDB9EC559FD5 /* SearchView.swift in Sources */,
@@ -413,6 +465,8 @@
 				BD5E32542066DFBB9202EB93 /* StremioService.swift in Sources */,
 				3F00970F365BC06F9869E27F /* StremioTVApp.swift in Sources */,
 				4E8385DE1716B2A62973C984 /* Theme.swift in Sources */,
+				671C9DCE5B161DC24402529E /* TrackSelector.swift in Sources */,
+				EA5D3FA44CFFE6C8111EDE6F /* VLCPlayerEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -429,6 +483,7 @@
 				D2432984F4B487E25F0237D9 /* StreamItemTests.swift in Sources */,
 				5EDABF788BF00F101A202349 /* StreamRankerTests.swift in Sources */,
 				3A2D2508B198E8B739F6FB2B /* TestSupport.swift in Sources */,
+				42755F20077B1245FC752ED2 /* TrackSelectorTests.swift in Sources */,
 				BA5FF09B826746FA361BF32D /* ViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -551,6 +606,10 @@
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -571,6 +630,10 @@
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
