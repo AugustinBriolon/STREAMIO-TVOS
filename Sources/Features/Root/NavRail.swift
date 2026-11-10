@@ -47,22 +47,23 @@ private struct RailLabel: View {
     let isSelected: Bool
     let expanded: Bool
 
-    /// Names take no width while collapsed, so a rail item never overlaps the first card of a row:
-    /// the focus engine would otherwise treat it as a candidate for up/down moves in the content.
+    /// The name is an overlay: it never changes the button's size. So opening the rail animates only
+    /// opacity and offset (no layout pass per frame), and a rail item never overlaps the first card of
+    /// a row, which the focus engine would treat as a candidate for up/down moves in the content.
     var body: some View {
-        HStack(spacing: Theme.Spacing.m) {
-            Image(systemName: tab.symbol)
-                .symbolVariant(isSelected ? .fill : .none)
-                .font(.system(size: 30, weight: isSelected ? .bold : .regular))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 44, height: 44)
-            Text(title)
-                .font(.system(size: 28, weight: isSelected ? .bold : .medium))
-                .lineLimit(1)
-                .frame(width: expanded ? 220 : 0, alignment: .leading)
-                .opacity(expanded ? 1 : 0)
-                .clipped()
-        }
+        Image(systemName: tab.symbol)
+            .symbolVariant(isSelected ? .fill : .none)
+            .font(.system(size: 30, weight: isSelected ? .bold : .regular))
+            .contentTransition(.symbolEffect(.replace))
+            .frame(width: 44, height: 44)
+            .overlay(alignment: .leading) {
+                Text(title)
+                    .font(.system(size: 28, weight: isSelected ? .bold : .medium))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .offset(x: 44 + Theme.Spacing.m + (expanded ? 0 : -12))
+                    .opacity(expanded ? 1 : 0)
+            }
     }
 }
 
@@ -99,8 +100,9 @@ private struct RailItemBody: View {
                     .offset(x: -16)
                     .opacity(isSelected ? 1 : 0)
             }
-            .scaleEffect(reduceMotion ? 1 : (isFocused ? 1.1 : (configuration.isPressed ? 0.96 : 1)), anchor: .leading)
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.1, reduceMotion: reduceMotion), anchor: .leading)
             .animation(Theme.Motion.focus, value: isFocused)
+            .animation(Theme.Motion.press, value: configuration.isPressed)
             .animation(Theme.Motion.focus, value: isSelected)
     }
 }

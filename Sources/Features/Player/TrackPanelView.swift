@@ -89,7 +89,8 @@ private struct TrackRowBody: View {
             .padding(.vertical, Theme.Spacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isFocused ? Color.white : Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.button))
-            .scaleEffect(isFocused ? 1.03 : 1)
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.03, reduceMotion: false))
             .animation(Theme.Motion.focus, value: isFocused)
+            .animation(Theme.Motion.press, value: configuration.isPressed)
     }
 }

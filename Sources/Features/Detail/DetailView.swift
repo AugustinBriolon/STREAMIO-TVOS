@@ -25,17 +25,21 @@ struct DetailView: View {
                     StateView(kind: .error(message) { Task { await model.loadIfNeeded(resumeSeason: resume?.video?.season) } })
                         .frame(height: 400)
                 case .loaded:
-                    if model.item.type == .series { episodesSection }
+                    if model.item.type == .series { episodesSection.transition(.opacity) }
                     if !model.similar.isEmpty {
                         ShelfRow("Titres similaires", items: model.similar) { item in
                             NavigationLink(value: item) { PosterCard(item: item) }
                                 .buttonStyle(CardFocusStyle())
                         }
+                        .transition(.opacity)
                     }
                 case .idle, .loading:
                     ProgressView().frame(maxWidth: .infinity)
                 }
             }
+            // Episodes and similar titles arrive after the hero: fade them in rather than pop.
+            .animation(Theme.Motion.fade, value: model.state)
+            .animation(Theme.Motion.fade, value: model.similar.isEmpty)
             .padding(.bottom, Theme.Spacing.xxl)
         }
         .scrollIndicators(.hidden)

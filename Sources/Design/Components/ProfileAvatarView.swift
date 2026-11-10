@@ -47,7 +47,8 @@ private struct AvatarButtonBody: View {
 
     var body: some View {
         configuration.label
-            .scaleEffect(reduceMotion ? 1 : (isFocused ? Theme.Motion.focusScale : (configuration.isPressed ? 0.96 : 1)))
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, reduceMotion: reduceMotion))
             .animation(Theme.Motion.focus, value: isFocused)
+            .animation(Theme.Motion.press, value: configuration.isPressed)
     }
 }

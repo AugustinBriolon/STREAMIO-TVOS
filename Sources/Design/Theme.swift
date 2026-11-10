@@ -65,6 +65,17 @@ enum Theme {
         static let focus = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
         static let fade = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.3)
         static let panel = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.25)
+        /// Click feedback: the shortest animation in the app, the interface must feel like it heard the click.
+        static let press = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.12)
+        static let pressScale: CGFloat = 0.96
+
+        /// Scale of a focusable control. On tvOS only the focused element can be clicked, so the press
+        /// dip is applied on top of the focus scale (a first version only dipped unfocused controls,
+        /// which never happens: nothing reacted to a click).
+        static func scale(focused: Bool, pressed: Bool, focusScale: CGFloat = Motion.focusScale, reduceMotion: Bool) -> CGFloat {
+            if reduceMotion { return 1 }
+            return (focused ? focusScale : 1) * (pressed ? pressScale : 1)
+        }
     }
 
     enum Layout {

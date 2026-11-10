@@ -25,9 +25,10 @@ private struct CardFocusBody: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.card)
                     .strokeBorder(Theme.Palette.focusRing, lineWidth: isFocused && showsRing ? 4 : 0)
             }
-            .scaleEffect(reduceMotion ? 1 : (isFocused ? Theme.Motion.focusScale : (configuration.isPressed ? 0.97 : 1)))
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, reduceMotion: reduceMotion))
             .shadow(color: .black.opacity(isFocused ? 0.6 : 0), radius: 18, y: 10)
             .animation(Theme.Motion.focus, value: isFocused)
+            .animation(Theme.Motion.press, value: configuration.isPressed)
             .zIndex(isFocused ? 1 : 0)
             .onChange(of: isFocused) { _, focused in
                 if focused { onFocus?() }
@@ -64,9 +65,10 @@ private struct PillButtonBody: View {
             .foregroundStyle(highlighted ? Color.black : Theme.Palette.textPrimary)
             .background(highlighted ? Color.white : Theme.Palette.secondaryButton,
                         in: RoundedRectangle(cornerRadius: Theme.Radius.button))
-            .scaleEffect(reduceMotion ? 1 : (isFocused ? 1.06 : (configuration.isPressed ? 0.97 : 1)))
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.06, reduceMotion: reduceMotion))
             .shadow(color: .black.opacity(isFocused ? 0.5 : 0), radius: 12, y: 6)
             .animation(Theme.Motion.focus, value: isFocused)
+            .animation(Theme.Motion.press, value: configuration.isPressed)
             .onChange(of: isFocused) { _, focused in
                 if focused { onFocus?() }
             }
@@ -86,6 +88,7 @@ private struct ChipBody: View {
     let configuration: ButtonStyleConfiguration
     let isSelected: Bool
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         configuration.label
@@ -97,7 +100,8 @@ private struct ChipBody: View {
                 Capsule().fill(isFocused ? Color.white : (isSelected ? Theme.Palette.surfaceRaised : Color.clear))
             }
             .overlay { Capsule().strokeBorder(Theme.Palette.textTertiary, lineWidth: isSelected || isFocused ? 0 : 1) }
-            .scaleEffect(isFocused ? 1.06 : 1)
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.06, reduceMotion: reduceMotion))
             .animation(Theme.Motion.focus, value: isFocused)
+            .animation(Theme.Motion.press, value: configuration.isPressed)
     }
 }

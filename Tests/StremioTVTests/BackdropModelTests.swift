@@ -22,3 +22,18 @@ struct BackdropModelTests {
         #expect(model.item == nil)
     }
 }
+
+struct MotionTests {
+    @Test func aFocusedControlDipsWhenPressed() {
+        let resting = Theme.Motion.scale(focused: true, pressed: false, reduceMotion: false)
+        let pressed = Theme.Motion.scale(focused: true, pressed: true, reduceMotion: false)
+        #expect(resting == Theme.Motion.focusScale)
+        #expect(pressed < resting)          // the click is visible on the focused element
+        #expect(pressed > 1)                // but it stays the focused one
+        #expect(Theme.Motion.scale(focused: false, pressed: false, reduceMotion: false) == 1)
+    }
+
+    @Test func reduceMotionRemovesScaling() {
+        #expect(Theme.Motion.scale(focused: true, pressed: true, reduceMotion: true) == 1)
+    }
+}
