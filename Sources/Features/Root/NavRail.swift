@@ -10,6 +10,8 @@ import SwiftUI
 /// - other: outline icon, medium weight, dimmed.
 struct NavRail: View {
     let selected: AppTab
+    /// The Profils entry is named after the active profile.
+    let profileName: String
     let focus: FocusState<AppTab?>.Binding
     let onSelect: (AppTab) -> Void
 
@@ -23,11 +25,11 @@ struct NavRail: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 ForEach(AppTab.allCases, id: \.self) { tab in
                     Button { onSelect(tab) } label: {
-                        RailLabel(tab: tab, isSelected: tab == selected, expanded: expanded)
+                        RailLabel(tab: tab, title: tab == .profiles ? profileName : tab.title, isSelected: tab == selected, expanded: expanded)
                     }
                     .buttonStyle(RailItemStyle(isSelected: tab == selected))
                     .focused(focus, equals: tab)
-                    .accessibilityLabel(tab.title)
+                    .accessibilityLabel(tab == .profiles ? profileName : tab.title)
                     .accessibilityAddTraits(tab == selected ? .isSelected : [])
                 }
             }
@@ -41,6 +43,7 @@ struct NavRail: View {
 
 private struct RailLabel: View {
     let tab: AppTab
+    let title: String
     let isSelected: Bool
     let expanded: Bool
 
@@ -53,7 +56,7 @@ private struct RailLabel: View {
                 .font(.system(size: 30, weight: isSelected ? .bold : .regular))
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 44, height: 44)
-            Text(tab.title)
+            Text(title)
                 .font(.system(size: 28, weight: isSelected ? .bold : .medium))
                 .lineLimit(1)
                 .frame(width: expanded ? 220 : 0, alignment: .leading)

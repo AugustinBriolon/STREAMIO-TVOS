@@ -1,51 +1,47 @@
 import Foundation
 import Observation
 
-/// Playback position of one movie or one episode.
-public struct PlaybackProgress: Codable, Hashable, Identifiable, Sendable {
-    public let item: MediaItem
-    public let video: VideoItem?
-    public var position: Double
-    public var duration: Double
-    public var updatedAt: Date
-
-    /// Movie id, or episode id ("tt123:1:3") for series.
-    public var id: String { video?.id ?? item.id }
-
-    public var fraction: Double {
-        duration > 0 ? min(max(position / duration, 0), 1) : 0
-    }
-
-    public var isFinished: Bool { fraction >= LibraryStore.finishedThreshold }
-
-    public var remainingMinutes: Int? {
-        guard duration > 0 else { return nil }
-        return max(Int((duration - position) / 60), 1)
-    }
-}
-
-/// "Ma liste" and watch progress, persisted as JSON in UserDefaults (see ADR 0004).
+/// "Ma liste" and watch progress of one profile, persisted as JSON in the shared UserDefaults (ADR 0004, 0014).
 @MainActor
 @Observable
 public final class LibraryStore {
-    public nonisolated static let finishedThreshold = 0.9
-    /// Below this, a restart from the beginning is more useful than a resume.
-    public nonisolated static let minimumResumeSeconds: Double = 30
+    public nonisolated static let finishedThreshold = PlaybackProgress.finishedThreshold
+    public nonisolated static let minimumResumeSeconds = PlaybackProgress.minimumResumeSeconds
     static let maxProgressEntries = 200
+    /// Profile used when none is given (unit tests).
+    nonisolated static let defaultProfileID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
-    public private(set) var myList: [MediaItem]
-    private var progressByID: [String: PlaybackProgress]
+    public private(set) var myList: [MediaItem] = []
+    private var progressByID: [String: PlaybackProgress] = [:]
+    public private(set) var profileID: UUID
 
     private let defaults: UserDefaults
     private let now: () -> Date
-    static let myListKey = "library.myList.v1"
-    static let progressKey = "library.progress.v1"
 
-    public init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {
+    init(profileID: UUID = LibraryStore.defaultProfileID, defaults: UserDefaults = AppGroup.defaults,
+                now: @escaping () -> Date = Date.init) {
+        self.profileID = profileID
         self.defaults = defaults
         self.now = now
-        myList = Self.decode([MediaItem].self, from: defaults, key: Self.myListKey) ?? []
-        let entries = Self.decode([PlaybackProgress].self, from: defaults, key: Self.progressKey) ?? []
+        load()
+    }
+
+    /// Switches to another profile's list and progress.
+    public func switchProfile(to id: UUID) {
+        guard id != profileID else { return }
+        profileID = id
+        load()
+    }
+
+    /// Removes everything stored for a profile (used when the profile is deleted).
+    nonisolated static func erase(profileID: UUID, from defaults: UserDefaults) {
+        defaults.removeObject(forKey: StorageKey.myList(profileID))
+        defaults.removeObject(forKey: StorageKey.progress(profileID))
+    }
+
+    private func load() {
+        myList = Self.decode([MediaItem].self, from: defaults, key: StorageKey.myList(profileID)) ?? []
+        let entries = Self.decode([PlaybackProgress].self, from: defaults, key: StorageKey.progress(profileID)) ?? []
         progressByID = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { $0.updatedAt > $1.updatedAt ? $0 : $1 })
     }
 
@@ -59,7 +55,7 @@ public final class LibraryStore {
         } else {
             myList.insert(item, at: 0)
         }
-        persist(myList, key: Self.myListKey)
+        persist(myList, key: StorageKey.myList(profileID))
     }
 
     // MARK: Progress
@@ -121,7 +117,7 @@ public final class LibraryStore {
         if kept.count < progressByID.count {
             progressByID = Dictionary(uniqueKeysWithValues: kept.map { ($0.id, $0) })
         }
-        persist(Array(kept), key: Self.progressKey)
+        persist(Array(kept), key: StorageKey.progress(profileID))
     }
 
     private func persist<T: Encodable>(_ value: T, key: String) {

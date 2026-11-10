@@ -77,6 +77,7 @@ struct HomeView: View {
                 .contextMenu {
                     Button("Retirer de Reprendre la lecture", systemImage: "xmark.circle", role: .destructive) {
                         library.removeFromContinueWatching(titleID: entry.item.id)
+                        TopShelfRefresher.refresh()
                     }
                     Button(library.isInMyList(entry.item.id) ? "Retirer de Ma liste" : "Ajouter à Ma liste",
                            systemImage: library.isInMyList(entry.item.id) ? "checkmark" : "plus") {

@@ -30,6 +30,8 @@ private struct OpensRailOnExit: ViewModifier {
 /// Icon rail navigation and the app-wide player presentation.
 struct RootView: View {
     @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(ProfileStore.self) private var profiles
+    @Environment(LibraryStore.self) private var library
     @State private var selected: AppTab = .home
     /// Pages are created on first visit and then kept alive, so they keep their data and scroll position.
     @State private var visited: Set<AppTab> = [.home]
@@ -55,7 +57,7 @@ struct RootView: View {
             railScrim
             // Icons live in the screen margin (outside the safe area), left of every page's content,
             // so the rail never overlaps a card the focus engine could confuse with it.
-            NavRail(selected: selected, focus: $railFocus, onSelect: select)
+            NavRail(selected: selected, profileName: profiles.active.name, focus: $railFocus, onSelect: select)
                 .padding(.leading, Theme.Spacing.l)
                 .ignoresSafeArea(edges: .leading)
                 .disabled(!railEnabled)
@@ -63,6 +65,20 @@ struct RootView: View {
                 .onExitCommand(perform: returnFocusToPage)
         }
         .environment(\.railOpener, opener)
+        // Each profile has its own list and progress: follow the active one.
+        .onChange(of: profiles.activeID) { _, id in
+            library.switchProfile(to: id)
+            TopShelfRefresher.refresh()
+        }
+        // The Top Shelf shows the profile's "Reprendre la lecture": refresh it when a playback ends.
+        .onChange(of: playback.session == nil) { _, ended in
+            if ended { TopShelfRefresher.refresh() }
+        }
+        // A Top Shelf item resumes that entry of the active profile.
+        .onOpenURL { url in
+            guard let id = TopShelfLink.progressID(from: url), let entry = library.progress(for: id) else { return }
+            Task { await playback.play(item: entry.item, video: entry.video) }
+        }
         // The system search keyboard cannot carry its own handler, so on Search's root screen Menu is
         // caught here. Everywhere else it is either a page handler (`opensRailOnExit`), a pushed screen
         // (Menu goes back: a root handler would swallow it, measured on device) or the rail itself
@@ -139,6 +155,7 @@ struct RootView: View {
         case .myList: MyListView()
         case .search: SearchView(atRoot: $searchAtRoot)
         case .settings: SettingsView(isActive: selected == .settings)
+        case .profiles: ProfilesView(onSwitched: { select(.home) })
         }
     }
 

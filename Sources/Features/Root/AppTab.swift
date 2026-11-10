@@ -2,7 +2,7 @@ import Foundation
 
 /// Top-level destinations, in rail order.
 enum AppTab: CaseIterable, Hashable {
-    case home, movies, series, myList, search, settings
+    case home, movies, series, myList, search, settings, profiles
 
     var title: String {
         switch self {
@@ -12,6 +12,7 @@ enum AppTab: CaseIterable, Hashable {
         case .myList: return "Ma liste"
         case .search: return "Recherche"
         case .settings: return "Réglages"
+        case .profiles: return "Profils"
         }
     }
 
@@ -23,6 +24,7 @@ enum AppTab: CaseIterable, Hashable {
         case .myList: return "plus.rectangle.on.rectangle"
         case .search: return "magnifyingglass"
         case .settings: return "gearshape"
+        case .profiles: return "person.crop.circle"
         }
     }
 }
