@@ -13,7 +13,7 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 - Picks French audio and subtitles automatically from the file's embedded tracks (forced subtitles with French audio, full subtitles otherwise); both can be changed from the player.
 - Tracks watch progress: "Reprendre la lecture" row, resume position, episode watched at 90 %, "Épisode suivant" action in the player.
 - Keeps "Ma liste" and the watch progress locally, per **profile** (create, edit, delete, switch from the Profils destination; up to 6 profiles; addons are shared).
-- Shows the active profile's "Reprendre la lecture" on the Apple TV home screen (Top Shelf extension; the app must be on the top row).
+- Shows the active profile's "Reprendre la lecture" and "Ma liste" on the Apple TV home screen (Top Shelf extension; the app must be on the top row). Selecting an item opens its page, the Play button plays it.
 - Serves a PIN-protected local web page (port 8080, only while Réglages is open) to paste addon URLs from a phone or computer.
 
 **What it does not do:**

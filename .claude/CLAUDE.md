@@ -20,10 +20,10 @@ Native tvOS (Apple TV) Stremio client written in SwiftUI. Target: tvOS 18+, Swif
 - UI strings are **French**; code, comments, docs and ADRs are **English**.
 - Views are pure: data loading and business rules live in view models (`@Observable @MainActor`) or services.
 - Dependencies are injected through the SwiftUI environment from `StremioTVApp`; services sit behind protocols so tests can stub them.
-- Use `Theme` tokens for colors, spacing, typography — no hardcoded values in features.
+- Use `Theme` tokens for colors, spacing, typography — no hardcoded values in features. Control scale goes through `Theme.Motion.scale(focused:pressed:)` so a click is visible on the focused element.
 - Playback goes through libVLC (`VLCPlayerEngine`); AVPlayer cannot open the MKV/DTS/PGS files addons return. Diagnose playback issues from raw data (engine state, `ffprobe` on the stream URL), not from addon labels.
 - Navigation is a custom icon rail (ADR 0010): the system sidebar cannot drop its backgrounds. The rail is gated (`railReady`/`railSuppressed` in RootView): enabled from the start it steals the initial focus while a page loads (ADR 0011).
-- Profiles (ADR 0014): the library is per profile, stored in the App Group defaults. Migrations must COPY, never move or delete. Never install a build without the `application-groups` entitlement over the real app (UI-test hosts included): the shared container is recreated empty and the user's data is lost.
+- Profiles (ADR 0014): the library is per profile, stored in the App Group defaults. Migrations must COPY, never move or delete. Never install a build without the `application-groups` entitlement over the real app: its data then goes to an app-local file and the real store looks empty. This happened through a UI-test project that had an app target with the same bundle id and kept a stale copy in its build products (ADR 0016): a UI-test project must only contain the test bundle and launch the app by bundle identifier.
 - Secrets (addon URLs embed debrid keys) go to the Keychain, never to `UserDefaults` or logs.
 
 ## Commands

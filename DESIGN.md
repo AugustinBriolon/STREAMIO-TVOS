@@ -72,6 +72,8 @@ Principles (Apple's fluid-interface talks, Emil Kowalski's animation rules, tran
 - **Fast and strong ease-out** (`cubic-bezier(0.23, 1, 0.32, 1)`): feedback starts at once and settles gently, never overshoots. Focus changes happen dozens of times a minute, so `Theme.Motion.focus` is 0.2 s; fades and panels 0.25–0.3 s. No `ease-in`, no springs with bounce on navigation.
 - **Retargetable, not scripted**: SwiftUI animations start from the on-screen value, so moving focus twice quickly never jumps. The backdrop fade only ever stacks two layers: it settles an unfinished fade before starting the next.
 - **Only `transform` and `opacity` move**: focus scale, backdrop opacity, panel opacity. Backdrop scrims are baked into the image, so the compositor draws one opaque layer.
+- **Click feedback**: every control dips to 0.96 of its focused size for 0.12 s when clicked (`Theme.Motion.scale`). On tvOS only the focused element is clickable, so the dip multiplies the focus scale.
+- **Entrances**: content that arrives after loading fades in (0.3 s); rows are not staggered because they are created lazily and the stagger would replay on scroll.
 - **Reduce Motion**: cards and buttons keep ring/colour feedback but stop scaling.
 - **Nothing animates that is used constantly without need**: track rows, seek head and list rows react with colour only.
 - **Performance budget (Apple TV HD, A8)**: browsing must stay under ~6 % of frames above 25 ms (measured with an in-app `CADisplayLink` probe, see ADR 0009). Artwork is decoded off the main thread at display size; page backdrops read their own state so a focus change never re-renders the page.
