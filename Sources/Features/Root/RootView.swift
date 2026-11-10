@@ -40,6 +40,8 @@ struct RootView: View {
     @State private var opener = RailOpener()
     /// False while a title page is pushed on Search: there Menu must go back, not open the rail.
     @State private var searchAtRoot = true
+    /// A title the Top Shelf asked to show: the home page pushes its detail page.
+    @State private var linkedTitle: MediaItem?
     /// The rail is the left-most focusable view: enabled from the start it wins the focus at launch (the page
     /// is still loading) and after a selection, and `resetFocus` cannot take it back (measured on device).
     /// So it becomes focusable once a page element has held focus (`railReady`) and is switched off between
@@ -74,11 +76,8 @@ struct RootView: View {
         .onChange(of: playback.session == nil) { _, ended in
             if ended { TopShelfRefresher.refresh() }
         }
-        // A Top Shelf item resumes that entry of the active profile.
-        .onOpenURL { url in
-            guard let id = TopShelfLink.progressID(from: url), let entry = library.progress(for: id) else { return }
-            Task { await playback.play(item: entry.item, video: entry.video) }
-        }
+        .onChange(of: library.myList.map(\.id)) { TopShelfRefresher.refresh() }
+        .onOpenURL(perform: open)
         // The system search keyboard cannot carry its own handler, so on Search's root screen Menu is
         // caught here. Everywhere else it is either a page handler (`opensRailOnExit`), a pushed screen
         // (Menu goes back: a root handler would swallow it, measured on device) or the rail itself
@@ -111,8 +110,10 @@ struct RootView: View {
                 StateView(kind: .loading("Recherche du meilleur flux…"))
                     .background(.black.opacity(0.75))
                     .ignoresSafeArea()
+                    .transition(.opacity)
             }
         }
+        .animation(Theme.Motion.panel, value: playback.isResolving)
         .fullScreenCover(isPresented: Binding(
             get: { playback.session != nil },
             set: { if !$0 { playback.close() } }
@@ -149,7 +150,7 @@ struct RootView: View {
     @ViewBuilder
     private func page(for tab: AppTab) -> some View {
         switch tab {
-        case .home: HomeView(scope: nil)
+        case .home: HomeView(scope: nil, linkedTitle: $linkedTitle)
         case .movies: HomeView(scope: .movie)
         case .series: HomeView(scope: .series)
         case .myList: MyListView()
@@ -169,6 +170,25 @@ struct RootView: View {
             .animation(Theme.Motion.panel, value: railFocus != nil)
             .ignoresSafeArea()
             .allowsHitTesting(false)
+    }
+
+    /// Top Shelf links (ADR 0016): the Play button resumes or plays, selecting an item shows its page.
+    private func open(_ url: URL) {
+        switch TopShelfLink(url: url) {
+        case .resume(let id):
+            guard let entry = library.progress(for: id) else { return }
+            Task { await playback.play(item: entry.item, video: entry.video) }
+        case .play(let id):
+            guard let item = library.item(withID: id) else { return }
+            Task { await playback.play(item: item) }
+        case .details(let id):
+            guard let item = library.item(withID: id) else { return }
+            playback.close()
+            if selected != .home { select(.home) }
+            linkedTitle = item
+        case nil:
+            break
+        }
     }
 
     private func select(_ tab: AppTab) {

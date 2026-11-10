@@ -9,21 +9,34 @@ struct HomeView: View {
     @State private var playOrigin: String?
     @State private var backdrop = BackdropModel()
 
-    init(scope: MediaType?) {
+    @State private var path = NavigationPath()
+    /// A title to show on top of this page (Top Shelf link); consumed once pushed.
+    @Binding private var linkedTitle: MediaItem?
+
+    init(scope: MediaType?, linkedTitle: Binding<MediaItem?> = .constant(nil)) {
         _model = State(initialValue: HomeViewModel(scope: scope))
+        _linkedTitle = linkedTitle
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 DynamicBackdrop(model: backdrop, fallback: model.billboard)
+                // The catalog fades in once loaded instead of replacing the spinner in one frame.
                 content
+                    .transition(.opacity)
+                    .animation(Theme.Motion.fade, value: model.state)
             }
             .opensRailOnExit()
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
         }
         .restoresFocusAfterPlayback($focused, to: playOrigin)
         .task { await model.loadIfNeeded() }
+        .onChange(of: linkedTitle, initial: true) { _, item in
+            guard let item else { return }
+            path = NavigationPath([item])
+            linkedTitle = nil
+        }
     }
 
     @ViewBuilder

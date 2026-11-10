@@ -58,6 +58,11 @@ public final class LibraryStore {
         persist(myList, key: StorageKey.myList(profileID))
     }
 
+    /// A title known to this profile (in its list or its history), for links coming from the Top Shelf.
+    public func item(withID id: String) -> MediaItem? {
+        myList.first { $0.id == id } ?? progressByID.values.first { $0.item.id == id }?.item
+    }
+
     // MARK: Progress
 
     public func progress(for videoID: String) -> PlaybackProgress? { progressByID[videoID] }

@@ -1,26 +1,29 @@
 import TVServices
 
-/// Top Shelf of the Apple TV home screen: the active profile's "Reprendre la lecture" (ADR 0015).
-/// Returning nil makes the system show the static Top Shelf image from the asset catalog.
+/// Top Shelf of the Apple TV home screen: the active profile's "Reprendre la lecture" and "Ma liste"
+/// (ADR 0015, 0016). Returning nil makes the system show the static Top Shelf image from the asset catalog.
 final class ContentProvider: TVTopShelfContentProvider {
     override func loadTopShelfContent() async -> TVTopShelfContent? {
-        let entries = TopShelfEntry.load(defaults: AppGroup.defaults)
-        guard !entries.isEmpty else { return nil }
+        let sections = TopShelfSection.load(defaults: AppGroup.defaults)
+        guard !sections.isEmpty else { return nil }
 
-        let items = entries.map { entry -> TVTopShelfSectionedItem in
-            let item = TVTopShelfSectionedItem(identifier: entry.id)
-            item.title = [entry.title, entry.subtitle].compactMap { $0 }.joined(separator: " · ")
-            item.imageShape = .hdtv
-            if let url = entry.imageURL {
-                item.setImageURL(url, for: [.screenScale1x, .screenScale2x])
-            }
-            item.playbackProgress = entry.progress
-            item.playAction = TVTopShelfAction(url: entry.link)
-            item.displayAction = TVTopShelfAction(url: entry.link)
-            return item
+        return TVTopShelfSectionedContent(sections: sections.map { section in
+            let collection = TVTopShelfItemCollection(items: section.entries.map(Self.item))
+            collection.title = section.title
+            return collection
+        })
+    }
+
+    private static func item(_ entry: TopShelfEntry) -> TVTopShelfSectionedItem {
+        let item = TVTopShelfSectionedItem(identifier: entry.id)
+        item.title = entry.title
+        item.imageShape = entry.isPoster ? .poster : .hdtv
+        if let url = entry.imageURL {
+            item.setImageURL(url, for: [.screenScale1x, .screenScale2x])
         }
-        let section = TVTopShelfItemCollection(items: items)
-        section.title = "Reprendre la lecture"
-        return TVTopShelfSectionedContent(sections: [section])
+        if let progress = entry.progress { item.playbackProgress = progress }
+        item.playAction = TVTopShelfAction(url: entry.playLink.url)
+        item.displayAction = TVTopShelfAction(url: entry.displayLink.url)
+        return item
     }
 }
