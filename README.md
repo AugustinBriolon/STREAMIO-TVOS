@@ -12,7 +12,8 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 - Queries every configured stream addon in parallel, ranks the results (codec the device decodes, Debrid, best quality the TV can display) and plays the best one directly; a manual source picker remains available.
 - Picks French audio and subtitles automatically from the file's embedded tracks (forced subtitles with French audio, full subtitles otherwise); both can be changed from the player.
 - Tracks watch progress: "Reprendre la lecture" row, resume position, episode watched at 90 %, "Épisode suivant" action in the player.
-- Keeps "Ma liste" locally.
+- Keeps "Ma liste" and the watch progress locally, per **profile** (create, edit, delete, switch from the Profils destination; up to 6 profiles; addons are shared).
+- Shows the active profile's "Reprendre la lecture" on the Apple TV home screen (Top Shelf extension; the app must be on the top row).
 - Serves a PIN-protected local web page (port 8080, only while Réglages is open) to paste addon URLs from a phone or computer.
 
 **What it does not do:**
@@ -32,11 +33,14 @@ Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, wr
 Sources/
 ├── App/            # Entry point, dependency wiring, image cache sizing
 ├── Design/         # Theme tokens + pure components (cards, rows, buttons, states)
+├── Shared/         # Code compiled into the app and the Top Shelf extension (AppGroup, TopShelf entries)
 ├── Assets.xcassets/ # Generated icon + Top Shelf images (scripts/generate-brand-assets.swift)
 ├── Models/         # Stremio protocol models, stream parsing, load state
 ├── Services/       # StremioService (network), ImagePipeline (decoded, cached artwork), LibraryStore, AddonStore (Keychain),
 │                   # StreamRanker, HTTPRequestParser, ConfigPortal/ConfigServer
-└── Features/       # Root (icon rail), Home, Detail, Streams, Player, Search, MyList, Settings
+└── Features/       # Profiles, Root (icon rail), Home, Detail, Streams, Player, Search, MyList, Settings
+TopShelf/           # Top Shelf extension (ADR 0015)
+Config/             # Generated entitlements and Info.plists (from project.yml)
 Tests/StremioTVTests/  # Swift Testing unit tests
 ```
 
