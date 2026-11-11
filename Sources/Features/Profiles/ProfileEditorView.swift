@@ -31,7 +31,7 @@ struct ProfileEditorView: View {
 
             VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                 Text(editedProfile == nil ? "Ajouter un profil" : "Modifier le profil")
-                    .font(Theme.Typography.pageTitle)
+                    .font(Theme.Typography.pageTitle).tracking(Theme.Typography.displayTracking)
                 TextField("Nom du profil", text: $name)
                     .font(Theme.Typography.body)
                     .onSubmit(save)

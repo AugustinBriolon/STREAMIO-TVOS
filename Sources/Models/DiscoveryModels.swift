@@ -138,17 +138,62 @@ public struct SagaCollection: Identifiable, Hashable, Sendable {
         return URL(string: "https://image.tmdb.org/t/p/w500\(posterPath)")
     }
 
-    /// Liste des identifiants des grandes sagas culte à découvrir
-    public static let curatedCollectionIDs: [Int] = [
-        10,     // Star Wars
-        1241,   // Harry Potter
-        726871, // Dune
-        119,    // Le Seigneur des Anneaux
-        263,    // The Dark Knight
-        645,    // James Bond 007
-        87359,  // Mission : Impossible
-        9485    // Fast & Furious
+    /// The curated sagas, in display order, each with the accent colour that gives its page an identity.
+    /// Every identifier was checked against TMDB's `/collection/{id}` endpoint.
+    public static let curated: [(id: Int, accentHex: String)] = [
+        (10, "#FFE81F"),      // Star Wars
+        (1241, "#D3A625"),    // Harry Potter
+        (726871, "#E0A458"),  // Dune
+        (119, "#D4AF37"),     // The Lord of the Rings
+        (86311, "#E23636"),   // Avengers
+        (263, "#7A9CC6"),     // The Dark Knight
+        (645, "#C9A14A"),     // James Bond
+        (87359, "#E63946"),   // Mission: Impossible
+        (9485, "#3A86FF"),    // Fast & Furious
+        (2344, "#39D353"),    // The Matrix
+        (328, "#F2B705"),     // Jurassic Park
+        (295, "#C8A46B"),     // Pirates of the Caribbean
+        (84, "#E0903A"),      // Indiana Jones
+        (121938, "#8FBC6A"),  // The Hobbit
+        (87096, "#2EC4F1"),   // Avatar
+        (8091, "#9BE564"),    // Alien
+        (404609, "#B36BFF"),  // John Wick
+        (131635, "#F28C28"),  // The Hunger Games
+        (230, "#B08D57"),     // The Godfather
+        (264, "#FF7A00"),     // Back to the Future
+        (528, "#E03C31"),     // Terminator
+        (8945, "#F4A300"),    // Mad Max
+        (748, "#F5C400"),     // X-Men
+        (10194, "#FFD23F"),   // Toy Story
     ]
+
+    public static var curatedCollectionIDs: [Int] { curated.map(\.id) }
+
+    /// `nil` for a collection outside the curated list: its page falls back to the neutral style.
+    public var accentColorHex: String? {
+        Self.curated.first { $0.id == tmdbCollectionID }?.accentHex
+    }
+
+    /// TMDB names collections "Star Wars - Saga" or "Dune Collection": the suffix repeats what the page already says.
+    public var displayName: String {
+        var result = name
+        for suffix in [" - Saga", " - Collection", " Collection", " (Collection)"] where result.hasSuffix(suffix) {
+            result.removeLast(suffix.count)
+        }
+        return result
+    }
+
+    /// "1977–2019", or one year when every film shares it; `nil` while the films are not loaded.
+    public var yearSpan: String? {
+        let years = parts.compactMap(\.releaseInfo).filter { !$0.isEmpty }.sorted()
+        guard let first = years.first, let last = years.last else { return nil }
+        return first == last ? first : "\(first)–\(last)"
+    }
+
+    /// Stand-in title so the page backdrop (which follows a `MediaItem`) can show the saga's own artwork.
+    public var backdropItem: MediaItem {
+        MediaItem(id: id, name: displayName, type: .movie, background: backdropURL?.absoluteString)
+    }
 }
 
 /// Modèle pour un festival ou cérémonie de remise de prix (Palmarès).

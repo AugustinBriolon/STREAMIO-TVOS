@@ -29,9 +29,9 @@ struct AwardedMediaCard: View {
                         .padding(10)
                 }
                 .frame(width: size.width, height: size.height)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card)
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
                 }
             }

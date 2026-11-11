@@ -26,7 +26,7 @@ struct SagaCard: View {
                             }
                     }
 
-                    Text(saga.name)
+                    Text(saga.displayName)
                         .font(Theme.Typography.cardTitle)
                         .fontWeight(.heavy)
                         .foregroundStyle(Theme.Palette.textPrimary)
@@ -37,11 +37,11 @@ struct SagaCard: View {
                 .background(Theme.Gradients.cardScrim)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: Theme.Radius.card)
+                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(saga.name), saga de \(saga.partsCount) films")
+            .accessibilityLabel("\(saga.displayName), saga de \(saga.partsCount) films")
     }
 }

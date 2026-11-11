@@ -173,14 +173,14 @@ private struct RailIconBadge: View {
                     if isSubpageActive {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.uturn.backward")
-                                .font(.system(size: 13, weight: .bold))
+                                .font(Theme.Typography.badge)
                             Text("Retour")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(Theme.Typography.badge)
                         }
-                        .foregroundStyle(Color.cyan)
+                        .foregroundStyle(Theme.Palette.info)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.cyan.opacity(0.15)))
+                        .background(Capsule().fill(Theme.Palette.info.opacity(0.15)))
                     }
                 }
                 .offset(x: 58)

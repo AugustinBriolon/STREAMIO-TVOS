@@ -45,60 +45,54 @@ struct RemoteImage: View {
 }
 
 /// Title artwork (logo) with a text fallback when the logo is missing.
+/// Loaded through `ImagePipeline` like every other image: decoded off the main thread at display
+/// size and kept in the memory cache, so a logo seen once appears at once the next time.
 struct LogoTitle: View {
     let name: String
     let logoURL: URL?
     var maxSize = Theme.Layout.logoSize
     var font = Theme.Typography.billboardTitle
 
+    @State private var logo: UIImage?
+    @State private var failed = false
+
+    private var maxPixel: CGFloat { maxSize.width * Theme.pixelScale }
+    private var cached: UIImage? { logoURL.flatMap { ImagePipeline.shared.cached($0, maxPixel: maxPixel) } }
+
     var body: some View {
-        AsyncImage(url: logoURL) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFit()
+        Group {
+            if let logo = logo ?? cached {
+                Image(uiImage: logo).resizable().scaledToFit()
                     .frame(maxWidth: maxSize.width, maxHeight: maxSize.height, alignment: .bottomLeading)
                     // Thin light halo keeps dark logos readable on dark backdrops.
                     .shadow(color: .white.opacity(0.35), radius: 1)
                     .shadow(color: .black.opacity(0.6), radius: 12)
-            } else if case .empty = phase, logoURL != nil {
+            } else if logoURL != nil, !failed {
+                // Holds the logo's place while it loads, so the text below does not jump.
                 Color.clear.frame(width: maxSize.width, height: maxSize.height / 2)
             } else {
                 Text(name)
                     .font(font)
+                    .tracking(Theme.Typography.displayTracking)
                     .foregroundStyle(Theme.Palette.textPrimary)
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.7), radius: 10, y: 4)
             }
         }
         .accessibilityLabel(name)
+        .task(id: logoURL) { await load() }
     }
-}
 
-/// Scrims drawn over a backdrop: bottom and leading gradients keep text and rows readable.
-struct BackdropScrim: View {
-    /// Extra black layer so cards drawn over the backdrop stay readable (list pages).
-    var dimming: Double = 0
-
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [.clear, Theme.Palette.canvas.opacity(0.7), Theme.Palette.canvas],
-                           startPoint: .center, endPoint: .bottom)
-            LinearGradient(colors: [Theme.Palette.canvas.opacity(0.9), .clear],
-                           startPoint: .leading, endPoint: UnitPoint(x: 0.65, y: 0.5))
-            Color.black.opacity(dimming)
+    private func load() async {
+        logo = nil
+        failed = false
+        guard let logoURL, cached == nil else { return }
+        let loaded = await ImagePipeline.shared.image(for: logoURL, maxPixel: maxPixel)
+        guard !Task.isCancelled else { return }
+        if let loaded {
+            withAnimation(Theme.Motion.fade) { logo = loaded }
+        } else {
+            failed = true
         }
-        .allowsHitTesting(false)
-    }
-}
-
-/// Full-bleed backdrop with the scrims that keep text readable.
-struct BackdropView: View {
-    let url: URL?
-    var dimming: Double = 0
-
-    var body: some View {
-        RemoteImage(url: url, maxPixel: 1280, showsPlaceholder: false)
-            .overlay { BackdropScrim(dimming: dimming) }
-            .clipped()
-            .accessibilityHidden(true)
     }
 }

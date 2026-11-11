@@ -22,6 +22,19 @@ struct DiscoveryTests {
 
     @Test func sagasHaveValidCuratedIDs() {
         #expect(!SagaCollection.curatedCollectionIDs.isEmpty)
+        #expect(Set(SagaCollection.curatedCollectionIDs).count == SagaCollection.curatedCollectionIDs.count)
+        let films = ["1977", "2019", "1980"].enumerated().map { MediaItem(id: "tmdb:\($0.offset)", name: "F", type: .movie, releaseInfo: $0.element) }
+        let starWars = SagaCollection(id: "collection:10", tmdbCollectionID: 10, name: "Star Wars - Saga", overview: nil,
+                                      posterPath: nil, backdropPath: "/b.jpg", partsCount: 3, parts: films)
+        #expect(starWars.displayName == "Star Wars")
+        #expect(starWars.yearSpan == "1977–2019")
+        #expect(starWars.accentColorHex == "#FFE81F")
+        #expect(starWars.backdropItem.background == "https://image.tmdb.org/t/p/w1280/b.jpg")
+        let unknown = SagaCollection(id: "collection:1", tmdbCollectionID: 1, name: "Dune Collection", overview: nil,
+                                     posterPath: nil, backdropPath: nil, partsCount: 0)
+        #expect(unknown.displayName == "Dune")
+        #expect(unknown.accentColorHex == nil)
+        #expect(unknown.yearSpan == nil)
         let sample = SagaCollection(
             id: "collection:10",
             tmdbCollectionID: 10,

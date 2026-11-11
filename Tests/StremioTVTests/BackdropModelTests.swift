@@ -33,6 +33,12 @@ struct MotionTests {
         #expect(Theme.Motion.scale(focused: false, pressed: false, reduceMotion: false) == 1)
     }
 
+    @Test func wideRowsLiftLessThanCards() {
+        let row = Theme.Motion.scale(focused: true, pressed: false, focusScale: Theme.Motion.rowFocusScale, reduceMotion: false)
+        #expect(row == Theme.Motion.rowFocusScale)
+        #expect(row < Theme.Motion.focusScale)
+    }
+
     @Test func reduceMotionRemovesScaling() {
         #expect(Theme.Motion.scale(focused: true, pressed: true, reduceMotion: true) == 1)
     }

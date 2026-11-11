@@ -1,6 +1,19 @@
 import Foundation
 import Observation
 
+enum StreamAvailability: Equatable {
+    case idle
+    case checking
+    case available(playableCount: Int, totalCount: Int)
+    case unavailable(notices: [String], totalCount: Int)
+    case noAddons
+
+    var hasPlayableStream: Bool {
+        if case .available = self { return true }
+        return false
+    }
+}
+
 @MainActor
 @Observable
 final class DetailViewModel {
@@ -9,10 +22,14 @@ final class DetailViewModel {
     private(set) var state: LoadState = .idle
     private(set) var similar: [MediaItem] = []
     private(set) var distinctions: [AwardDistinction] = []
+    private(set) var availability: StreamAvailability = .idle
+    private(set) var prefetchedStreams: [StreamItem] = []
+    private(set) var checkedVideoID: String?
     var selectedSeason: Int?
 
     @ObservationIgnored private let service: StremioProviding
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var checkedSignature: String?
 
     init(item: MediaItem, service: StremioProviding = StremioService()) {
         self.item = item
@@ -22,6 +39,10 @@ final class DetailViewModel {
 
     /// Detail summary once loaded, catalog item before.
     var summary: MediaItem { detail?.summary ?? item }
+    /// The backdrop the page opened with stays for the whole visit: the detail metadata often names a
+    /// different image, and swapping it once loaded made the page jump. Only a catalog item without an
+    /// image of its own takes the one from the details.
+    var backdropURL: URL? { item.background != nil ? item.backgroundURL : summary.backgroundURL }
     var episodes: [VideoItem] { detail?.videos ?? [] }
 
     /// Tous les identifiants connus pour ce titre (pré-résolution TMDB + canonique IMDb) pour Ma liste / reprise / distinctions.
@@ -86,6 +107,48 @@ final class DetailViewModel {
             return
         }
         await loadSimilar()
+    }
+
+    /// Returns streams already fetched during availability check when they match `videoID`.
+    func prefetchedStreams(for videoID: String) -> [StreamItem]? {
+        checkedVideoID == videoID ? prefetchedStreams : nil
+    }
+
+    /// Checks once per (videoID, addons) whether at least one playable stream exists on this Apple TV.
+    func checkAvailability(addons: [String], targetVideoID: String?, device: DeviceCapabilities = .all) async {
+        guard !addons.isEmpty else {
+            prefetchedStreams = []
+            checkedVideoID = nil
+            availability = .noAddons
+            return
+        }
+
+        let checkID: String? = switch item.type {
+        case .movie: summary.id
+        case .series: targetVideoID ?? episodes.firstEpisode?.id
+        }
+        guard let checkID else { return }
+
+        let signature = "\(checkID)|\(addons.joined(separator: ","))"
+        guard checkedSignature != signature else { return }
+        checkedSignature = signature
+
+        availability = .checking
+        let fetched = await service.fetchStreams(type: item.type, id: checkID, addonBaseURLs: addons)
+        let ranked = StreamRanker.rank(fetched, device: device)
+        prefetchedStreams = ranked
+        checkedVideoID = checkID
+
+        let playable = ranked.filter(\.isPlayable)
+        if !playable.isEmpty {
+            availability = .available(playableCount: playable.count, totalCount: ranked.count)
+        } else {
+            var seen = Set<String>()
+            let notices = ranked.filter(\.isNotice)
+                .map(\.fullDescription)
+                .filter { !$0.isEmpty && seen.insert($0).inserted }
+            availability = .unavailable(notices: notices, totalCount: ranked.count)
+        }
     }
 
     /// Same first genre, excluding this title. Cinemeta has no recommendation endpoint.

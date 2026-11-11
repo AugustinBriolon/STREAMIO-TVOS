@@ -20,7 +20,9 @@ struct PlaybackSession: Identifiable, Equatable {
 @Observable
 final class PlaybackCoordinator {
     private(set) var session: PlaybackSession?
-    private(set) var isResolving = false
+    /// The title whose streams are being looked up, between the click on "Lecture" and the player opening.
+    private(set) var resolvingItem: MediaItem?
+    var isResolving: Bool { resolvingItem != nil }
     var errorMessage: String?
 
     @ObservationIgnored private let service: StremioProviding
@@ -41,8 +43,8 @@ final class PlaybackCoordinator {
         guard !addons.urls.isEmpty else {
             return fail("Aucun addon n'est configuré. Ajoutez-en un dans Réglages.")
         }
-        isResolving = true
-        defer { isResolving = false }
+        resolvingItem = item
+        defer { resolvingItem = nil }
 
         var allEpisodes = episodes ?? []
         if item.type == .series, episodes == nil {

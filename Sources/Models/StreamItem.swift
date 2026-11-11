@@ -81,12 +81,15 @@ public struct StreamItem: Codable, Identifiable, Hashable, Sendable {
 
     public var isPlayable: Bool { playableURL != nil }
 
+    /// True when an addon returned a diagnostic/filter notice rather than a playable stream or torrent.
+    public var isNotice: Bool { !isPlayable && infoHash == nil }
+
     /// French reason shown when a source cannot be played on Apple TV.
     public var unplayableReason: String? {
         if isPlayable { return nil }
         if infoHash != nil { return "Torrent direct non supporté — utilisez un addon Debrid" }
-        if externalUrl != nil { return "Lien externe non supporté" }
-        return "Format de flux non supporté"
+        if externalUrl != nil { return "Message de l'add-on (configuration requise)" }
+        return "Information de l'add-on (aucun flux vidéo)"
     }
 
     /// HEVC needs a hardware decoder the Apple TV HD does not have.
@@ -137,6 +140,12 @@ public struct StreamItem: Codable, Identifiable, Hashable, Sendable {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         return lines.first ?? name ?? "Flux vidéo"
+    }
+
+    public var fullDescription: String {
+        let trimmed = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        return (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func firstCapture(_ pattern: String) -> String? {

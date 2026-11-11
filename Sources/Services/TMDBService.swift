@@ -423,7 +423,11 @@ public struct TMDBService: Sendable {
         }
 
         let rawParts = collection.parts ?? []
-        let sortedParts = rawParts.sorted { ($0.release_date ?? "") < ($1.release_date ?? "") }
+        // Announced films have no date yet: they go last, not first.
+        let undated = "9999"
+        let sortedParts = rawParts.sorted {
+            ($0.release_date.flatMap { $0.isEmpty ? nil : $0 } ?? undated) < ($1.release_date.flatMap { $0.isEmpty ? nil : $0 } ?? undated)
+        }
         let items = sortedParts.map { $0.toMediaItem() }
 
         return SagaCollection(

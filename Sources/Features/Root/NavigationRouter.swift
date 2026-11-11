@@ -6,8 +6,6 @@ import Observation
 /// permet la détection de profondeur (`isAtRoot`) et implémente le contrat Apple HIG "Pop to Root".
 @Observable @MainActor
 final class NavigationRouter {
-    var selectedTab: AppTab = .home
-
     var homePath = NavigationPath()
     var moviesPath = NavigationPath()
     var seriesPath = NavigationPath()

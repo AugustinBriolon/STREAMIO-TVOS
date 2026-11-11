@@ -1,107 +1,92 @@
 import SwiftUI
 
-/// Page détaillée pour une saga / franchise cinématographique (ex: Star Wars, Harry Potter, Dune).
+/// Saga page: the saga's own artwork as a hero, then its films numbered in release order.
+/// Each curated saga carries an accent colour (`SagaCollection.curated`) used for the title rule
+/// and the film numbers; other collections use plain white.
 struct SagaDetailView: View {
-    let initialSaga: SagaCollection
     @State private var saga: SagaCollection
     @State private var state: LoadState = .idle
     private let service: StremioProviding
 
     private let columns = [
-        GridItem(.adaptive(minimum: Theme.Card.posterSize.width), spacing: Theme.Spacing.cardGap)
+        GridItem(.adaptive(minimum: Theme.Card.posterSize.width), spacing: Theme.Spacing.cardGap, alignment: .top)
     ]
 
     init(saga: SagaCollection, service: StremioProviding = StremioService()) {
-        self.initialSaga = saga
         self._saga = State(initialValue: saga)
         self.service = service
+    }
+
+    private var accent: Color {
+        saga.accentColorHex.map { Color(hex: $0) } ?? Theme.Palette.textPrimary
     }
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-                heroHeader
-                    .padding(.horizontal, Theme.Spacing.gutter)
-                    .padding(.top, Theme.Spacing.xl)
-
+                hero
                 switch state {
                 case .idle, .loading:
-                    StateView(kind: .loading("Chargement des films de la saga…"))
-                        .frame(height: 360)
+                    ShelfSkeleton()
                 case .failed(let message):
                     StateView(kind: .error(message) { Task { await load() } })
                         .frame(height: 360)
                 case .loaded:
-                    partsGrid
-                        .padding(.horizontal, Theme.Spacing.gutter)
+                    films.padding(.horizontal, Theme.Spacing.gutter)
                 }
             }
             .padding(.bottom, Theme.Spacing.xxl)
         }
         .scrollIndicators(.hidden)
-        .background(
-            ZStack {
-                Theme.Palette.canvas.ignoresSafeArea()
-                if let backdropURL = saga.backdropURL {
-                    RemoteImage(url: backdropURL, maxPixel: 1920)
-                        .blur(radius: 40)
-                        .opacity(0.25)
-                        .ignoresSafeArea()
-                }
-            }
-        )
+        .ignoresSafeArea(edges: .top)
+        .background(Theme.Palette.canvas)
         .task { await load() }
         .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
     }
 
-    private var heroHeader: some View {
+    private var hero: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            HStack(spacing: Theme.Spacing.s) {
-                Text("SAGA & UNIVERS")
-                    .font(Theme.Typography.caption)
-                    .fontWeight(.heavy)
-                    .foregroundStyle(Theme.Palette.accent)
-                    .padding(.horizontal, Theme.Spacing.s)
-                    .padding(.vertical, 3)
-                    .background {
-                        Capsule()
-                            .fill(Theme.Palette.accent.opacity(0.18))
-                            .overlay {
-                                Capsule().strokeBorder(Theme.Palette.accent.opacity(0.3), lineWidth: 1)
-                            }
-                    }
-
-                Text("\(saga.parts.count > 0 ? saga.parts.count : saga.partsCount) volets")
-                    .font(Theme.Typography.caption)
-                    .foregroundStyle(Theme.Palette.textSecondary)
-            }
-
-            Text(saga.name)
-                .font(.system(size: 56, weight: .black))
+            Spacer(minLength: 0)
+            Capsule().fill(accent).frame(width: 72, height: 6)
+                .accessibilityHidden(true)
+            Text(saga.displayName)
+                .font(Theme.Typography.billboardTitle)
+                .tracking(Theme.Typography.displayTracking)
                 .foregroundStyle(Theme.Palette.textPrimary)
-
+                .lineLimit(2)
+            Text(summaryLine)
+                .font(Theme.Typography.meta)
+                .foregroundStyle(Theme.Palette.textSecondary)
             if let overview = saga.overview, !overview.isEmpty {
                 Text(overview)
                     .font(Theme.Typography.body)
-                    .foregroundStyle(Theme.Palette.textSecondary)
+                    .foregroundStyle(Theme.Palette.textPrimary)
                     .frame(maxWidth: Theme.Layout.synopsisWidth, alignment: .leading)
-                    .lineLimit(4)
+                    .lineLimit(3)
             }
+        }
+        .padding(.horizontal, Theme.Spacing.gutter)
+        .padding(.bottom, Theme.Spacing.m)
+        .frame(maxWidth: .infinity, minHeight: Theme.Layout.sagaHeroHeight, alignment: .bottomLeading)
+        .background(alignment: .top) {
+            BakedBackdrop(url: saga.backdropURL, dimming: 0.3)
+                .frame(height: Theme.Layout.backdropHeight)
+                .ignoresSafeArea()
         }
     }
 
-    private var partsGrid: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("Les films par ordre de sortie")
-                .font(Theme.Typography.rowTitle)
-                .foregroundStyle(Theme.Palette.textPrimary)
+    private var summaryLine: String {
+        let count = saga.parts.isEmpty ? saga.partsCount : saga.parts.count
+        return ["\(count) film\(count > 1 ? "s" : "")", saga.yearSpan].compactMap { $0 }.joined(separator: " · ")
+    }
 
-            LazyVGrid(columns: columns, spacing: Theme.Spacing.cardGap) {
-                ForEach(saga.parts) { movie in
-                    SagaMovieCard(movie: movie)
-                }
+    private var films: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.xl) {
+            ForEach(Array(saga.parts.enumerated()), id: \.element.id) { index, movie in
+                SagaMovieCard(number: index + 1, movie: movie, accent: accent)
             }
         }
+        .focusSection()
     }
 
     private func load() async {
@@ -109,11 +94,10 @@ struct SagaDetailView: View {
             state = .loaded
             return
         }
-
         state = .loading
-        let lang = AppPreferences.shared.metadataLanguage
-        if let fullSaga = await service.fetchCollection(collectionID: saga.tmdbCollectionID, language: lang) {
-            self.saga = fullSaga
+        let language = AppPreferences.shared.metadataLanguage
+        if let full = await service.fetchCollection(collectionID: saga.tmdbCollectionID, language: language) {
+            saga = full
             state = .loaded
         } else {
             state = .failed("Impossible de charger les films de la saga.")
@@ -121,35 +105,40 @@ struct SagaDetailView: View {
     }
 }
 
-/// Carte de film de saga reprenant exactement le design de `FilmographyCard` (fiche d'acteur) :
-/// Le bouton et l'effet de focus s'appliquent EXCLUSIVEMENT à l'affiche (`PosterCard`).
-/// Les textes (titre et date de sortie) sont disposés en dessous sans être englobés dans l'anneau de focus.
+/// A film of the saga: the poster holds the focus, its number, title and year sit below it.
 private struct SagaMovieCard: View {
+    let number: Int
     let movie: MediaItem
+    let accent: Color
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             NavigationLink(value: movie) {
                 PosterCard(item: movie)
             }
             .buttonStyle(CardFocusStyle())
             .focused($isFocused)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(movie.name)
-                    .font(Theme.Typography.cardTitle)
-                    .foregroundStyle(isFocused ? Theme.Palette.textPrimary : Theme.Palette.textSecondary)
-                    .lineLimit(1)
-
-                if let year = movie.releaseInfo, !year.isEmpty {
-                    Text(year)
-                        .font(Theme.Typography.caption)
-                        .foregroundStyle(Theme.Palette.textTertiary)
-                        .lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.s) {
+                Text("\(number)")
+                    .font(Theme.Typography.rowTitle.monospacedDigit())
+                    .foregroundStyle(accent)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    Text(movie.name)
+                        .font(Theme.Typography.cardTitle)
+                        .foregroundStyle(isFocused ? Theme.Palette.textPrimary : Theme.Palette.textSecondary)
+                        .lineLimit(2)
+                    if let year = movie.releaseInfo, !year.isEmpty {
+                        Text(year)
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                    }
                 }
             }
             .frame(width: Theme.Card.posterSize.width, alignment: .leading)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Film \(number) : \(movie.name)")
     }
 }

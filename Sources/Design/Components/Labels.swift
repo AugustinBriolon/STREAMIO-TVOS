@@ -60,7 +60,17 @@ struct Tag: View {
             .font(Theme.Typography.badge)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(color, in: RoundedRectangle(cornerRadius: Theme.Radius.badge))
+            .background(color, in: RoundedRectangle(cornerRadius: Theme.Radius.badge, style: .continuous))
             .foregroundStyle(Theme.Palette.textPrimary)
+    }
+}
+
+extension View {
+    /// One chunk of a staged entrance: fades and rises into place, `index` chunks after the first.
+    /// Plays once, when `shown` turns true; Reduce Motion keeps the fade and drops the movement.
+    func stagedEntrance(_ index: Int, shown: Bool, reduceMotion: Bool) -> some View {
+        opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : Theme.Motion.entranceOffset)
+            .animation(Theme.Motion.fade.delay(Double(index) * Theme.Motion.stagger), value: shown)
     }
 }

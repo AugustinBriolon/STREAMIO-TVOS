@@ -71,10 +71,10 @@ struct HubCatalogView: View {
         HStack(alignment: .center, spacing: Theme.Spacing.xl) {
             // Logo officiel de la marque avec cadre en verre
             ZStack {
-                RoundedRectangle(cornerRadius: Theme.Radius.card * 1.5, style: .continuous)
+                RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                     .fill(Color(white: 0.12).opacity(0.85))
                     .overlay {
-                        RoundedRectangle(cornerRadius: Theme.Radius.card * 1.5, style: .continuous)
+                        RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                             .strokeBorder(accentColor.opacity(0.35), lineWidth: 2)
                     }
 

@@ -12,6 +12,8 @@ struct HomeView: View {
     @State private var focusRestoreTask: Task<Void, Never>?
     @State private var playOrigin: String?
     @State private var backdrop = BackdropModel()
+    @Namespace private var zoomNamespace
+    @State private var zoomSource = ZoomSource()
 
     @Binding private var path: NavigationPath
     /// A title to show on top of this page (Top Shelf link); consumed once pushed.
@@ -33,7 +35,9 @@ struct HomeView: View {
                     .animation(Theme.Motion.fade, value: model.state)
             }
             .opensRailOnExit()
-            .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
+            .navigationDestination(for: MediaItem.self) {
+                DetailView(item: $0).navigationTransition(.zoom(sourceID: zoomSource.id, in: zoomNamespace))
+            }
             .navigationDestination(for: CastMember.self) { PersonDetailView(member: $0) }
             .navigationDestination(for: BrandHub.self) { HubCatalogView(hub: $0) }
             .navigationDestination(for: SagaCollection.self) { SagaDetailView(saga: $0) }
@@ -75,7 +79,7 @@ struct HomeView: View {
     private var content: some View {
         switch model.state {
         case .idle, .loading:
-            StateView(kind: .loading("Chargement du catalogue…"))
+            CatalogSkeleton()
         case .failed(let message):
             StateView(kind: .error(message) { Task { await model.load() } })
         case .loaded:
@@ -248,7 +252,7 @@ struct HomeView: View {
             NavigationLink(value: entry.element) {
                 Top10Card(rank: entry.offset + 1, item: entry.element)
             }
-            .buttonStyle(CardFocusStyle(showsRing: false, onFocus: { backdrop.focus(entry.element) }))
+            .buttonStyle(CardFocusStyle(showsSheen: false, onFocus: { backdrop.focus(entry.element) }))
         }
     }
 
@@ -257,7 +261,7 @@ struct HomeView: View {
             NavigationLink(value: hub) {
                 BrandHubCard(hub: hub)
             }
-            .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(nil) }))
+            .buttonStyle(CardFocusStyle(showsRing: true, onFocus: { backdrop.focus(nil) }))
         }
     }
 
@@ -333,7 +337,7 @@ struct HomeView: View {
             NavigationLink(value: saga) {
                 SagaCard(saga: saga)
             }
-            .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(nil) }))
+            .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(saga.backdropItem) }))
         }
     }
 
@@ -344,8 +348,20 @@ struct HomeView: View {
 
     private func posterRow(_ title: String, items: [MediaItem]) -> some View {
         ShelfRow(title, items: items) { item in
+            let sourceID = "\(title)-\(item.id)"
             NavigationLink(value: item) { PosterCard(item: item) }
-                .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(item) }))
+                .matchedTransitionSource(id: sourceID, in: zoomNamespace)
+                .buttonStyle(CardFocusStyle(onFocus: {
+                    backdrop.focus(item)
+                    zoomSource.id = sourceID
+                }))
         }
     }
+}
+
+/// The poster the title page zooms out of: the last focused one. The same title can sit in several
+/// rows, so the row is part of the identifier. A plain reference, not observed: writing it on every
+/// focus change must not re-render the page.
+private final class ZoomSource {
+    var id = ""
 }

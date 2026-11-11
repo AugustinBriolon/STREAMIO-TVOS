@@ -52,6 +52,48 @@ struct DetailViewModelTests {
         #expect(model.similar.map(\.id) == ["tt2"])
         #expect(DetailViewModel.seasonLabel(0) == "Spéciaux")
     }
+
+    @Test func availabilityDetectsAddonNoticesAndPlayableStreams() async {
+        var service = StubService()
+        let notice = StreamItem(name: "StreamFusion", title: "2 sources mais aucune qui passe vos filtres")
+        service.streams["tt99"] = [notice]
+
+        let unavailableModel = DetailViewModel(item: movie("tt99", "Model Citizen"), service: service)
+        await unavailableModel.checkAvailability(addons: ["https://addon.test"], targetVideoID: nil, device: .all)
+        #expect(unavailableModel.availability == .unavailable(notices: ["2 sources mais aucune qui passe vos filtres"], totalCount: 1))
+        #expect(!unavailableModel.availability.hasPlayableStream)
+        #expect(unavailableModel.prefetchedStreams(for: "tt99")?.count == 1)
+
+        service.streams["tt100"] = [notice, stream("RD+", url: "https://cdn/movie.mkv")]
+        let availableModel = DetailViewModel(item: movie("tt100", "Playable"), service: service)
+        await availableModel.checkAvailability(addons: ["https://addon.test"], targetVideoID: nil, device: .all)
+        #expect(availableModel.availability == .available(playableCount: 1, totalCount: 2))
+        #expect(availableModel.availability.hasPlayableStream)
+
+        await availableModel.checkAvailability(addons: [], targetVideoID: nil, device: .all)
+        #expect(availableModel.availability == .noAddons)
+    }
+}
+
+@MainActor
+struct StreamsViewModelTests {
+    @Test func filtersOutUnplayableEntriesByDefaultAndAllowsShowingAll() async {
+        var service = StubService()
+        let playable = stream("RD+", url: "https://cdn/ok.mp4")
+        let torrent = stream("Torrentio", url: nil, infoHash: "abc")
+        let notice = StreamItem(name: "StreamFusion", title: "2 sources mais aucune qui passe vos filtres")
+        service.streams["tt1"] = [notice, torrent, playable]
+
+        let model = StreamsViewModel(service: service)
+        await model.load(type: .movie, videoID: "tt1", addons: ["https://addon.test"])
+
+        #expect(model.playableCount == 1)
+        #expect(model.displayedStreams.map(\.id) == [playable.id])
+        #expect(model.noticeSummary == "2 sources mais aucune qui passe vos filtres")
+
+        model.filter = .all
+        #expect(model.displayedStreams.count == 3)
+    }
 }
 
 @MainActor
@@ -92,5 +134,15 @@ struct CancellationTests {
         await model.loadIfNeeded()
         #expect(model.state == .loaded)
         #expect(model.top10.map(\.id) == ["m1"])
+    }
+}
+
+@MainActor
+struct DetailBackdropTests {
+    @Test func titlePageKeepsTheBackdropItOpenedWith() {
+        let withImage = MediaItem(id: "tmdb:1", name: "A", type: .movie, background: "https://image.tmdb.org/t/p/w1280/a.jpg")
+        #expect(DetailViewModel(item: withImage, service: StubService()).backdropURL?.absoluteString == "https://image.tmdb.org/t/p/w1280/a.jpg")
+        let bare = MediaItem(id: "tt1", name: "B", type: .movie)
+        #expect(DetailViewModel(item: bare, service: StubService()).backdropURL == bare.backgroundURL)
     }
 }

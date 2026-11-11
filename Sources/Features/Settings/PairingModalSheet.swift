@@ -30,10 +30,11 @@ struct PairingModalSheet: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Synchronisation Multi-Écrans")
-                            .font(.system(size: 38, weight: .bold))
+                            .font(Theme.Typography.pageTitle)
+                            .tracking(Theme.Typography.displayTracking)
                             .foregroundStyle(.white)
                         Text("Connectez cette Apple TV à votre compte foyer pour partager profils, favoris et historique.")
-                            .font(.system(size: 18))
+                            .font(Theme.Typography.caption)
                             .foregroundStyle(Theme.Palette.textSecondary)
                     }
 
@@ -103,10 +104,10 @@ struct PairingModalSheet: View {
                         .scaledToFit()
                         .frame(width: 220, height: 220)
                         .padding(14)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
                         .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
                 } else if auth.pairingError != nil {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                         .fill(Color.white.opacity(0.05))
                         .frame(width: 248, height: 248)
                         .overlay {
@@ -115,7 +116,7 @@ struct PairingModalSheet: View {
                                 .foregroundStyle(Theme.Palette.accent)
                         }
                 } else {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                         .fill(Color.white.opacity(0.05))
                         .frame(width: 248, height: 248)
                         .overlay {
@@ -124,7 +125,7 @@ struct PairingModalSheet: View {
                 }
 
                 Text("Scannez avec l'appareil photo")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
 
@@ -139,20 +140,20 @@ struct PairingModalSheet: View {
                 // Code en clair si demandé par le smartphone
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Code de jumelage :")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.Typography.caption)
                         .foregroundStyle(Theme.Palette.textSecondary)
 
                     if let code = auth.activePairingCode {
                         Text(code)
-                            .font(.system(size: 34, weight: .bold, design: .monospaced))
+                            .font(Theme.Typography.pageTitle.monospaced())
                             .tracking(3)
                             .foregroundStyle(Color.white)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                            .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
                     } else {
                         Text("Génération…")
-                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .font(Theme.Typography.cardTitle.monospaced())
                             .foregroundStyle(Theme.Palette.textTertiary)
                     }
                 }
@@ -162,14 +163,14 @@ struct PairingModalSheet: View {
                     HStack(spacing: 12) {
                         ProgressView()
                         Text("En attente de validation sur votre smartphone…")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color.cyan)
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Palette.info)
                     }
                     .padding(.top, 4)
                 } else if let err = auth.pairingError {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(err)
-                            .font(.system(size: 15))
+                            .font(Theme.Typography.caption)
                             .foregroundStyle(Theme.Palette.accent)
 
                         Button("Générer un nouveau code") {
@@ -182,20 +183,20 @@ struct PairingModalSheet: View {
             .frame(maxWidth: 550, alignment: .leading)
         }
         .padding(32)
-        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 24))
+        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .padding(.horizontal, 48)
     }
 
     private func stepRow(number: String, text: String) -> some View {
         HStack(spacing: 12) {
             Text(number)
-                .font(.system(size: 15, weight: .bold))
+                .font(Theme.Typography.caption)
                 .foregroundStyle(.black)
-                .frame(width: 24, height: 24)
+                .frame(width: 36, height: 36)
                 .background(Color.white, in: Circle())
 
             Text(text)
-                .font(.system(size: 17, weight: .medium))
+                .font(Theme.Typography.caption)
                 .foregroundStyle(.white)
         }
     }
@@ -207,34 +208,34 @@ struct PairingModalSheet: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Adresse Email")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.Typography.caption)
                         .foregroundStyle(Theme.Palette.textSecondary)
 
                     TextField("nom@exemple.com", text: $email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
-                        .font(.system(size: 18))
+                        .font(Theme.Typography.body)
                         .padding(14)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Mot de passe")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.Typography.caption)
                         .foregroundStyle(Theme.Palette.textSecondary)
 
                     SecureField("••••••••••••", text: $password)
                         .textContentType(.password)
-                        .font(.system(size: 18))
+                        .font(Theme.Typography.body)
                         .padding(14)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
                 }
             }
             .frame(maxWidth: 500)
 
             if let directError {
                 Text(directError)
-                    .font(.system(size: 15))
+                    .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Palette.accent)
                     .frame(maxWidth: 500, alignment: .leading)
             }
@@ -260,7 +261,7 @@ struct PairingModalSheet: View {
             }
         }
         .padding(32)
-        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 24))
+        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .padding(.horizontal, 48)
     }
 

@@ -72,7 +72,7 @@ struct MyListView: View {
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: Theme.Spacing.l) {
                         Text("Ma liste")
-                            .font(Theme.Typography.pageTitle)
+                            .font(Theme.Typography.pageTitle).tracking(Theme.Typography.displayTracking)
                             .padding(.horizontal, Theme.Spacing.gutter)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: Theme.Spacing.xl) {
                             ForEach(library.myList) { item in

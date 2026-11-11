@@ -13,7 +13,7 @@ struct BrandHubCard: View {
     var body: some View {
         ZStack {
             // Fond en verre sombre avec halo lumineux subtil de la couleur de la marque
-            RoundedRectangle(cornerRadius: Theme.Radius.card)
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                 .fill(Color(white: 0.12).opacity(0.85))
 
             RadialGradient(
@@ -62,10 +62,10 @@ struct BrandHubCard: View {
         }
         .frame(width: size.width, height: size.height)
         .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.card)
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(hub.name)
     }

@@ -27,8 +27,8 @@ struct TrackPanelView: View {
         }
         .padding(Theme.Spacing.l)
         // Solid, not a blur material: blurring live video is expensive on the Apple TV HD.
-        .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: Theme.Radius.card * 2))
-        .overlay { RoundedRectangle(cornerRadius: Theme.Radius.card * 2).strokeBorder(Theme.Palette.surfaceRaised, lineWidth: 1) }
+        .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.Palette.surfaceRaised, lineWidth: 1) }
     }
 
     private func column(_ title: String, symbol: String, tracks: [MediaTrack], selected: Int32, allowsOff: Bool,
@@ -89,7 +89,7 @@ private struct TrackRowBody: View {
             .padding(.horizontal, Theme.Spacing.m)
             .padding(.vertical, Theme.Spacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isFocused ? Color.white : Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.button))
+            .background(isFocused ? Color.white : Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
             .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.03, reduceMotion: reduceMotion))
             .animation(Theme.Motion.focus, value: isFocused)
             .animation(Theme.Motion.press, value: configuration.isPressed)

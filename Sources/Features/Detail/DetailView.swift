@@ -5,10 +5,14 @@ struct DetailView: View {
     @State private var model: DetailViewModel
     @State private var sourcePicker: SourcePickerTarget?
     @State private var pickedStream: (target: SourcePickerTarget, stream: StreamItem)?
+    @Environment(AddonStore.self) private var addons
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: String?
     @State private var playOrigin: String?
+    /// Turns true on first appearance; coming back from a pushed page does not replay the entrance.
+    @State private var heroShown = false
 
     init(item: MediaItem) {
         _model = State(initialValue: DetailViewModel(item: item))
@@ -48,9 +52,7 @@ struct DetailView: View {
                     }
                     .transition(.opacity)
                 case .idle, .loading:
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 200)
+                    ShelfSkeleton(cardSize: model.item.type == .series ? Theme.Card.episodeSize : Theme.Card.posterSize)
                         .transition(.opacity)
                 }
             }
@@ -64,9 +66,18 @@ struct DetailView: View {
             PersonDetailView(member: member)
         }
         .task { await model.loadIfNeeded(resumeSeason: resume?.video?.season) }
+        .task(id: "\(model.state == .loaded)-\(addons.urls.joined(separator: ","))") {
+            guard model.state == .loaded else { return }
+            await model.checkAvailability(addons: addons.urls, targetVideoID: resume?.video?.id, device: .current)
+        }
         .restoresFocusAfterPlayback($focused, to: playOrigin)
         .sheet(item: $sourcePicker, onDismiss: playPickedStream) { target in
-            StreamsView(type: model.item.type, videoID: target.videoID, title: target.title) { stream in
+            StreamsView(
+                type: model.item.type,
+                videoID: target.videoID,
+                title: target.title,
+                initialStreams: model.prefetchedStreams(for: target.videoID)
+            ) { stream in
                 pickedStream = (target, stream)
             }
         }
@@ -79,7 +90,9 @@ struct DetailView: View {
         return VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Spacer(minLength: 0)
             LogoTitle(name: item.name, logoURL: item.logoURL)
+                .stagedEntrance(0, shown: heroShown, reduceMotion: reduceMotion)
             MetaLine(rating: item.displayRating, components: item.metaComponents)
+                .stagedEntrance(1, shown: heroShown, reduceMotion: reduceMotion)
             if !model.distinctions.isEmpty {
                 heroDistinctionStrip
             }
@@ -100,11 +113,20 @@ struct DetailView: View {
                 }
             }
             actions
+                .stagedEntrance(2, shown: heroShown, reduceMotion: reduceMotion)
+            availabilityNotice
         }
+        .onAppear { heroShown = true }
         .padding(.horizontal, Theme.Spacing.gutter)
         .padding(.bottom, Theme.Spacing.l)
         .frame(maxWidth: .infinity, minHeight: Theme.Layout.billboardHeight, alignment: .bottomLeading)
-        .background { BackdropView(url: item.backgroundURL).ignoresSafeArea() }
+        // Fixed height and a pinned URL: the hero grows when credits and distinctions arrive, and the
+        // detail metadata often carries another image. Either one made the picture jump after it appeared.
+        .background(alignment: .top) {
+            BakedBackdrop(url: model.backdropURL, dimming: 0.3)
+                .frame(height: Theme.Layout.backdropHeight)
+                .ignoresSafeArea()
+        }
         .focusSection()
     }
 
@@ -122,11 +144,22 @@ struct DetailView: View {
             .lineLimit(1)
     }
 
+    private var isUnavailable: Bool {
+        switch model.availability {
+        case .unavailable, .noAddons: true
+        default: false
+        }
+    }
+
     private var actions: some View {
         HStack(spacing: Theme.Spacing.m) {
             Button(resume?.resumeButtonTitle ?? "Lecture", systemImage: "play.fill") {
-                playOrigin = "play"
-                Task { await playback.play(item: model.summary, video: resume?.video, episodes: model.detail?.videos) }
+                if isUnavailable && model.item.type == .movie {
+                    sourcePicker = SourcePickerTarget(video: nil, videoID: model.summary.id, title: model.summary.name)
+                } else {
+                    playOrigin = "play"
+                    Task { await playback.play(item: model.summary, video: resume?.video, episodes: model.detail?.videos) }
+                }
             }
             .buttonStyle(PillButtonStyle(kind: .primary))
             .focused($focused, equals: "play")
@@ -143,6 +176,55 @@ struct DetailView: View {
             }
         }
         .padding(.top, Theme.Spacing.s)
+    }
+
+    private var availabilityDotColor: Color {
+        switch model.availability {
+        case .idle, .checking: Theme.Palette.textTertiary
+        case .available: Theme.Palette.match
+        case .unavailable, .noAddons: Theme.Palette.accent
+        }
+    }
+
+    private var availabilityLabel: String {
+        switch model.availability {
+        case .idle, .checking:
+            "Vérification des sources…"
+        case .available(let playableCount, _):
+            "\(playableCount) source\(playableCount > 1 ? "s" : "") disponible\(playableCount > 1 ? "s" : "")"
+        case .unavailable(let notices, let totalCount):
+            unavailableSummary(notices: notices, totalCount: totalCount)
+        case .noAddons:
+            "Aucun add-on configuré"
+        }
+    }
+
+    private var availabilityNotice: some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            Circle()
+                .fill(availabilityDotColor)
+                .overlay {
+                    Circle()
+                        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                }
+                .frame(width: 10, height: 10)
+            Text(availabilityLabel)
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Palette.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .animation(reduceMotion ? nil : Theme.Motion.fade, value: model.availability)
+    }
+
+    private func unavailableSummary(notices: [String], totalCount: Int) -> String {
+        if let first = notices.first {
+            return "Aucune source lisible — \(first)"
+        }
+        if totalCount > 0 {
+            return "Aucune source compatible (\(totalCount) filtrée\(totalCount > 1 ? "s" : ""))"
+        }
+        return "Aucune source disponible"
     }
 
     // MARK: Distinctions
@@ -199,11 +281,13 @@ struct DetailView: View {
                                 .buttonStyle(ChipButtonStyle(isSelected: model.selectedSeason == season))
                         }
                     }
-                    .padding(.horizontal, Theme.Spacing.gutter)
-                    .padding(.vertical, Theme.Spacing.s)
+                    .padding(.leading, Theme.Spacing.gutter)
+                    .padding(.trailing, Theme.Spacing.gutter + 90)
+                    .padding(.vertical, Theme.Spacing.m)
                 }
                 .scrollIndicators(.hidden)
-                .scrollClipDisabled()
+                .padding(.trailing, -90)
+                .horizontalEdgeFade()
                 .focusSection()
             }
             ShelfRow("Épisodes", items: model.episodesInSelectedSeason) { episode in
@@ -215,7 +299,8 @@ struct DetailView: View {
     private func episodeCard(_ episode: VideoItem) -> some View {
         let progress = library.progress(for: episode.id)
         let watched = progress?.isFinished == true
-        return VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+        // The focused card grows 8 pt downwards: the overview must sit clear of it.
+        return VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             Button {
                 playOrigin = "episode-\(episode.id)"
                 Task { await playback.play(item: model.summary, video: episode, episodes: model.episodes) }
@@ -272,6 +357,7 @@ struct SourcePickerTarget: Identifiable {
 private struct AwardDistinctionCard: View {
     let distinction: AwardDistinction
     @FocusState private var isFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -302,14 +388,14 @@ private struct AwardDistinctionCard: View {
         }
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.vertical, Theme.Spacing.s)
-        .frame(width: 310, height: 84, alignment: .leading)
+        .frame(width: 340, height: 100, alignment: .leading)
         .background(isFocused ? Theme.Palette.surfaceRaised : Color.white.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                 .strokeBorder(Theme.Palette.focusRing, lineWidth: isFocused ? 2 : 0)
         }
-        .scaleEffect(isFocused ? 1.04 : 1.0)
+        .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: false, focusScale: 1.04, reduceMotion: reduceMotion))
         .animation(Theme.Motion.focus, value: isFocused)
         .focusable()
         .focused($isFocused)

@@ -8,10 +8,10 @@ struct PosterCard: View {
         RemoteImage(url: item.posterURL, maxPixel: Theme.Card.posterSize.height * Theme.pixelScale)
             .frame(width: Theme.Card.posterSize.width, height: Theme.Card.posterSize.height)
             .overlay {
-                RoundedRectangle(cornerRadius: Theme.Radius.card)
+                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .accessibilityLabel(item.name)
     }
 }
@@ -42,7 +42,7 @@ struct LandscapeCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.Gradients.cardScrim)
             }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .accessibilityElement(children: .combine)
     }
 }

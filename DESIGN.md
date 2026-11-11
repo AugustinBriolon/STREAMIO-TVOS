@@ -6,7 +6,7 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 
 1. **Artwork first.** Posters, backdrops and title logos carry the identity; chrome stays neutral and dark.
 2. **One obvious action.** Every hero has a single white primary button ("Lecture" / "Reprendre"). Everything else is secondary.
-3. **Focus is the cursor.** The focused element must be identifiable from across the room: scale + white ring, never color alone.
+3. **Focus is the cursor.** The focused element must be identifiable from across the room, never by color alone. Artwork lifts (scale, shadow, tilt, sheen) without a ring; cards with no artwork (logo tiles, source rows) add the white ring.
 4. **Light on the hardware.** Targets include the Apple TV HD (A8): no blur materials in scrolling rows, short ease-out animations, cached images.
 
 ## 2. Color
@@ -20,6 +20,7 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 | `textPrimary/Secondary/Tertiary` | white 100 / 72 / 48 % | Hierarchy of text |
 | `rating` | `#F5C518` | IMDb star |
 | `match` | `#46D369` | Debrid tag |
+| `info` | system cyan | Live status, current value of a setting, "Retour" hint |
 
 ## 3. Typography (SF Pro)
 
@@ -29,15 +30,16 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 | `pageTitle` | 48 bold | Ma liste, Réglages, Sources |
 | `rowTitle` | 30 bold | Row headers |
 | `body` | 24 regular | Synopsis (max width 900 pt, 3–4 lines) |
-| `meta` | 22 medium, monospaced digits | "★ 7.8 · 2026 · 109 min · Horror" |
-| `cardTitle` | 22 semibold | Landscape cards, stream rows |
-| `caption` | 18 medium | Secondary info |
+| `meta` | 24 medium, monospaced digits | "★ 7.8 · 2026 · 109 min · Horror" |
+| `cardTitle` | 25 semibold | Landscape cards, stream rows |
+| `caption` | 23 medium | Secondary info. The floor: nothing smaller except `badge` (20) |
+| `displayTracking` | −0.8 pt | Applied to `pageTitle` and `billboardTitle` |
 | `rank` | 200 black, outlined | Top 10 numbers |
 
 ## 4. Spacing & shapes
 
 - Scale: 4 · 8 · 12 · 16 · 24 · 40 · 64 pt. Horizontal gutter: **48 pt** inside the tvOS safe area. Gap between cards: 24 pt.
-- Radius: cards and buttons 8 pt, tags 4 pt, chips capsule.
+- Radius, always continuous corners: cards 14 pt, buttons 12 pt, panels and section cards 20 pt, tags 6 pt, chips capsule.
 - Cards: poster 220×330 (2:3), landscape 400×225 (16:9, Reprendre), episode 360×202.
 - Billboard / title hero: 760 pt minimum height, full-bleed backdrop with bottom and leading scrims.
 
@@ -45,21 +47,26 @@ A Netflix-like, 10-foot interface for tvOS. Tokens live in [`Sources/Design/Them
 
 | Component | Notes |
 |---|---|
-| `CardFocusStyle` | Scale 1.08, 3 pt white ring + specular top-edge sheen, dual-layer ambient/contact shadow, raises z-index. `showsRing: false` for Top 10 tiles |
+| `CardFocusStyle` | Full-width rows (source picker) pass `rowFocusScale` 1.02 and no tilt. Cards: scale 1.08, specular (3 pt white ring only with `showsRing: true`, for cards without artwork) top-edge sheen, dual-layer ambient/contact shadow, raises z-index. `showsSheen: false` for Top 10 tiles |
 | `PillButtonStyle(.primary)` | Solid white, black label, specular top-edge sheen, elevated shadow — the main action |
 | `PillButtonStyle(.secondary)` | Translucent grey; turns white on focus with elevated shadow |
 | `ChipButtonStyle` | Season picker; selected = raised surface, focused = white with specular sheen |
 | `ShelfRow` | Titled horizontal row, `focusSection`, 24 pt vertical padding preventing shadow clipping |
 | `PosterCard`, `LandscapeCard`, `Top10Card` | Artwork cards; landscape uses non-linear progressive scrim to prevent OLED banding; poster has subtle 1 pt edge contour |
-| `BackdropView`, `LogoTitle` | Hero artwork; logo falls back to text, light halo keeps dark logos legible |
+| `BakedBackdrop`, `LogoTitle` | Hero artwork, scrims baked into one opaque image, fixed one-screen height so a growing hero never re-crops it; a title page keeps the backdrop it opened with; logo falls back to text, light halo keeps dark logos legible |
 | `MetaLine`, `ProgressBar`, `Tag` | Metadata line, watch progress, quality/HDR/audio tags |
 | `StateView` | Loading, empty and error (+ "Réessayer") states |
+| `CatalogSkeleton`, `ShelfSkeleton` | Static placeholders with the geometry of the real billboard and shelves, shown while a catalog page or a title page loads. No shimmer: a looping animation costs frames on the Apple TV HD |
+| `ResolvingView` | Between "Lecture" and the player: the title's backdrop and logo with "Recherche du meilleur flux…" |
 
 ## 6. Screens
 
 - **Icon rail** (`NavRail`, ADR 0010, 0011): Accueil, Films, Séries, Ma liste, Recherche, Réglages, Profils. Icons only, no background of any kind, in the left margin; names slide in while the rail has focus (with a soft black gradient behind them). Vertical navigation is strictly clamped within the rail with elastic rubber-band resistance at boundaries (scrolling down past Profils remains locked on Profils without leaking onto the page). Exiting to the page happens explicitly by moving Right or pressing Menu (ADR 0012). Moving left from any card opens it (landing on the current page). States without boxes: **selected** = filled symbol, bold name, full white, red mark; **cursor** = white and enlarged; **others** = outline symbol, medium weight, 42 % white. Pages cross-fade and keep their state (ADR 0010, 0011).
 - **Accueil / Films / Séries**: billboard → Reprendre la lecture → Ma liste → Top 10 → trending → genre rows.
-- **Profils**: the rail entry is named after the active profile. "Qui regarde ?" shows each profile as a colored disc (8 colors) with a symbol (10), the active one marked "Profil actif", plus a dashed "Ajouter un profil" disc. "Gérer les profils" puts a pencil badge on each card; the editor previews the avatar, and deletion asks for confirmation with Annuler as the default (ADR 0014).
+- **Profils**: the rail entry is named after the active profile. "Qui regarde ?" shows each profile as a 220 pt colored disc (8 colors) with a symbol (10), the active one wearing a white ring, over a page tinted with the focused profile's colour, plus a dashed "Ajouter un profil" disc. "Gérer les profils" puts a pencil badge on each card; the editor previews the avatar, and deletion asks for confirmation with Annuler as the default (ADR 0014).
+- **Réglages**: two columns like the system Settings app. Sections on the left (the one showing keeps a quiet highlight), its content on the right; the content follows the focused section, so sections with nothing clickable (QR code and PIN, À propos) are always reachable.
+- **Sagas**: 24 curated collections (`SagaCollection.curated`), each with an accent colour. Focusing a saga card shows the saga's backdrop behind the page. The saga page is a full-bleed hero (accent rule, name without TMDB's "- Saga" suffix, "9 films · 1977–2019", overview) over the films numbered in release order in the accent colour. Collections outside the list use white.
+- **Brand**: a white round-ended "V" holding one red dot, on flat near-black (`scripts/generate-brand-assets.swift`). No glow or gradient.
 - **Dynamic backdrop**: list pages draw one fixed full-screen backdrop behind the scrolling content. It cross-fades (0.45 s) to the focused title 250 ms after focus settles (`BackdropModel`), is dimmed 30 % under the scrims, and returns to the billboard title when focus goes back to its buttons.
 - **Title page**: hero with logo, meta, synopsis, credits, progress, actions (Lecture/Reprendre, Ma liste, Choisir une source) → seasons chips → episode cards (progress, watched check; long-press for sources) → Titres similaires.
 - **Seeking**: arrows or a circle on the clickpad ring pause playback and move a red scrub head; a 384×216 preview frame (white 3 pt border) and a large timestamp float above it, clamped to the screen. Click confirms, Menu returns to where playback was. Track buttons fade out while seeking.
@@ -76,6 +83,10 @@ Principles (Apple's fluid-interface talks, Emil Kowalski's animation rules, tran
 - **Retargetable, not scripted**: SwiftUI animations start from the on-screen value, so moving focus twice quickly never jumps. The backdrop fade only ever stacks two layers: it settles an unfinished fade before starting the next.
 - **Only `transform` and `opacity` move**: focus scale, backdrop opacity, panel opacity. Backdrop scrims are baked into the image, so the compositor draws one opaque layer.
 - **Entrances**: content that arrives after loading fades in (0.28 s); rows are not staggered because they are created lazily and the stagger would replay on scroll.
-- **Reduce Motion**: cards and buttons keep ring/colour feedback but stop scaling.
+- **Staged hero** (`stagedEntrance`): on a title page the logo, the meta line and the actions fade and rise 12 pt, 60 ms apart, once per page (not replayed when coming back from a pushed page).
+- **Poster zoom**: catalog poster rows are the `matchedTransitionSource` of their title page (`navigationTransition(.zoom)`), so the page grows out of the focused poster. Other card types still push.
+- **Billboard recedes**: its text fades to 25 % while the shelves scroll over it (`scrollTransition`, opacity only).
+- **Ma liste**: the symbol swaps and bounces once on toggle, the only bounce in the app.
+- **Reduce Motion**: cards and buttons keep colour feedback but stop scaling; staged entrances keep the fade and drop the movement.
 - **Performance budget (Apple TV HD, A8)**: browsing must stay under ~6 % of frames above 25 ms (measured with an in-app `CADisplayLink` probe, see ADR 0009). Artwork is decoded off the main thread at display size; page backdrops read their own state so a focus change never re-renders the page.
 - Images fade in over 0.28 s only when they were not already cached.

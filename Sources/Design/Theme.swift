@@ -14,6 +14,8 @@ enum Theme {
         static let rating = Color(red: 245 / 255, green: 197 / 255, blue: 24 / 255)
         static let match = Color(red: 70 / 255, green: 211 / 255, blue: 105 / 255)
         static let focusRing = Color.white
+        /// Live status and current values (sync in progress, selected option, "Retour" hint).
+        static let info = Color.cyan
         static let track = Color.white.opacity(0.3)
     }
 
@@ -31,20 +33,20 @@ enum Theme {
     }
 
     enum Radius {
-        static let card: CGFloat = 8
-        static let button: CGFloat = 8
-        static let badge: CGFloat = 4
+        static let card: CGFloat = 14
+        static let button: CGFloat = 12
+        static let badge: CGFloat = 6
+        /// Large surfaces: panels, section cards, hero banners.
+        static let panel: CGFloat = 20
     }
 
     /// Apple TV elevation and depth tokens.
     enum Shadow {
         /// Broad ambient diffusion representing the card/button lifting off the canvas plane toward the viewer.
-        static let ambientColor = Color.black.opacity(0.45)
         static let ambientRadius: CGFloat = 26
         static let ambientY: CGFloat = 12
 
         /// Directional contact shadow anchoring the control against directional overhead living-room lighting.
-        static let contactColor = Color.black.opacity(0.32)
         static let contactRadius: CGFloat = 8
         static let contactY: CGFloat = 4
 
@@ -85,13 +87,16 @@ enum Theme {
         static let billboardTitle = Font.system(size: 64, weight: .black)
         static let pageTitle = Font.system(size: 48, weight: .bold)
         static let rowTitle = Font.system(size: 30, weight: .bold)
-        static let cardTitle = Font.system(size: 22, weight: .semibold)
+        static let cardTitle = Font.system(size: 25, weight: .semibold)
         static let body = Font.system(size: 24)
-        static let meta = Font.system(size: 22, weight: .medium).monospacedDigit()
-        static let caption = Font.system(size: 18, weight: .medium)
-        static let badge = Font.system(size: 16, weight: .heavy)
+        static let meta = Font.system(size: 24, weight: .medium).monospacedDigit()
+        /// 23 pt is the smallest size that stays readable from the couch.
+        static let caption = Font.system(size: 23, weight: .medium)
+        static let badge = Font.system(size: 20, weight: .heavy)
         static let button = Font.system(size: 24, weight: .bold)
         static let rank = Font.system(size: 200, weight: .black)
+        /// Tracking for `pageTitle` and `billboardTitle`: large text reads loose at the default spacing.
+        static let displayTracking: CGFloat = -0.8
     }
 
     enum Card {
@@ -100,7 +105,6 @@ enum Theme {
         static let episodeSize = CGSize(width: 360, height: 202)
         static let brandHubSize = CGSize(width: 260, height: 116)
         static let sagaSize = CGSize(width: 380, height: 214)
-        static let awardSize = CGSize(width: 320, height: 154)
     }
 
     /// Pixels per point of the current output (2 on a 4K Apple TV, 1 on 1080p).
@@ -110,6 +114,8 @@ enum Theme {
     /// across rapid remote swipes) and high-stiffness tactile spring for remote clickpad actuation.
     enum Motion {
         static let focusScale: CGFloat = 1.08
+        /// Full-width rows: 1.08 on a 1700 pt row would push it into the screen margins.
+        static let rowFocusScale: CGFloat = 1.02
         /// Critically-damped interactive spring: immediate response, zero bounce, smooth momentum handoff.
         static let focus = Animation.spring(duration: 0.22, bounce: 0)
         /// Tactile clickpad depression spring matching physical remote button actuation.
@@ -123,6 +129,9 @@ enum Theme {
         /// Transport HUD overlay exit: rapid dismissal (clears the picture out of the viewer's way).
         static let overlayExit = Animation.spring(duration: 0.20, bounce: 0)
         static let pressScale: CGFloat = 0.96
+        /// Delay between the chunks of a staged entrance (logo, meta, actions).
+        static let stagger: Double = 0.06
+        static let entranceOffset: CGFloat = 12
 
         /// Scale of a focusable control. On tvOS only the focused element can be clicked, so the press
         /// dip is applied on top of the focus scale (a first version only dipped unfocused controls,
@@ -135,6 +144,10 @@ enum Theme {
 
     enum Layout {
         static let billboardHeight: CGFloat = 760
+        /// Hero backdrops are one screen tall whatever the hero holds (tvOS is always 1920x1080 pt).
+        static let backdropHeight: CGFloat = 1080
+        /// Shorter than the billboard, so the first row of films shows under it.
+        static let sagaHeroHeight: CGFloat = 560
         static let synopsisWidth: CGFloat = 900
         static let logoSize = CGSize(width: 620, height: 200)
     }

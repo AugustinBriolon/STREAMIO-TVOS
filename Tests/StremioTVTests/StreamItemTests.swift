@@ -58,4 +58,16 @@ struct StreamItemTests {
         #expect(item.providerName == "Torrentio")
         #expect(item.parsedTitle == "Movie.1080p.mkv")
     }
+
+    @Test func detectsAddonFilterNoticesSeparatelyFromTorrents() {
+        let notice = StreamItem(name: "StreamFusion", title: "2 sources mais aucune qui passe vos filtres")
+        #expect(!notice.isPlayable)
+        #expect(notice.isNotice)
+        #expect(notice.fullDescription == "2 sources mais aucune qui passe vos filtres")
+        #expect(notice.unplayableReason?.contains("Information de l'add-on") == true)
+
+        let torrent = stream("Torrentio", url: nil, infoHash: "deadbeef")
+        #expect(!torrent.isNotice)
+        #expect(!torrent.isPlayable)
+    }
 }

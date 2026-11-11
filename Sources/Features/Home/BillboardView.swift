@@ -40,6 +40,10 @@ struct BillboardView: View {
         .padding(.bottom, Theme.Spacing.xl)
         .frame(maxWidth: .infinity, minHeight: Theme.Layout.billboardHeight, alignment: .bottomLeading)
         .focusSection()
+        // The billboard text recedes as the shelves scroll over it; opacity only, so it also suits Reduce Motion.
+        .scrollTransition(.interactive, axis: .vertical) { content, phase in
+            content.opacity(phase.isIdentity ? 1 : 0.25)
+        }
     }
 }
 
@@ -53,6 +57,8 @@ struct MyListButton: View {
         Button(action: action) {
             Label("Ma liste", systemImage: isInMyList ? "checkmark" : "plus")
                 .contentTransition(.symbolEffect(.replace))
+                // A rare, deliberate action: the one place a bounce is earned.
+                .symbolEffect(.bounce, value: isInMyList)
         }
         .buttonStyle(PillButtonStyle(onFocus: onFocus))
         .accessibilityValue(isInMyList ? "Ajouté" : "Non ajouté")

@@ -378,8 +378,8 @@ private struct ScrubBar: View {
                 }
             }
             .frame(width: Self.previewSize.width, height: Self.previewSize.height)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
-            .overlay { RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(.white, lineWidth: 3) }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(.white, lineWidth: 3) }
             Text(headLabel)
                 .font(Theme.Typography.rowTitle.monospacedDigit())
                 .shadow(color: .black, radius: 6)

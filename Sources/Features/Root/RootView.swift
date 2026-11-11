@@ -58,6 +58,7 @@ struct RootView: View {
         ZStack(alignment: .leading) {
             Theme.Palette.canvas.ignoresSafeArea()
             pages.focusScope(contentScope)
+            restingRailScrim
             railScrim
             // Icons live in the screen margin (outside the safe area), left of every page's content,
             // so the rail never overlaps a card the focus engine could confuse with it.
@@ -128,10 +129,8 @@ struct RootView: View {
             lastRailTab = nil
         }
         .overlay {
-            if playback.isResolving {
-                StateView(kind: .loading("Recherche du meilleur flux…"))
-                    .background(.black.opacity(0.75))
-                    .ignoresSafeArea()
+            if let item = playback.resolvingItem {
+                ResolvingView(item: item)
                     .transition(.opacity)
             }
         }
@@ -186,6 +185,24 @@ struct RootView: View {
         }
     }
 
+    /// Subtle resting canvas gradient anchoring the collapsed rail before horizontal shelf fades meet it.
+    private var restingRailScrim: some View {
+        LinearGradient(
+            stops: [
+                .init(color: Theme.Palette.canvas.opacity(0.94), location: 0.0),
+                .init(color: Theme.Palette.canvas.opacity(0.82), location: 0.58),
+                .init(color: Theme.Palette.canvas.opacity(0.38), location: 0.80),
+                .init(color: .clear, location: 1.0)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: 124)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
     /// Soft progressive fade so titles stay crisp over bright hero artwork while the rail is expanded.
     private var railScrim: some View {
         LinearGradient(
@@ -202,7 +219,7 @@ struct RootView: View {
         .frame(width: 680)
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(railFocus != nil ? 1 : 0)
-        .animation(Theme.Motion.panel, value: railFocus != nil)
+        .animation(reduceMotion ? nil : Theme.Motion.panel, value: railFocus != nil)
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }

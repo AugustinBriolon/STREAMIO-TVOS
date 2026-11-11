@@ -28,6 +28,17 @@ struct PlaybackCoordinatorTests {
         #expect(coordinator.session?.resumePosition == 900)
     }
 
+    @Test func resolvingTitleIsClearedOnceThePlayIsSettled() async {
+        var service = StubService()
+        service.streams["tt9"] = [stream("[RD+]", "1080p", url: "https://ok")]
+        let coordinator = makeCoordinator(service)
+        #expect(!coordinator.isResolving)
+        await coordinator.play(item: movie("tt9"))
+        #expect(coordinator.resolvingItem == nil)
+        await coordinator.play(item: movie("tt404"))
+        #expect(coordinator.resolvingItem == nil)
+    }
+
     @Test func reportsWhenNothingIsPlayable() async {
         var service = StubService()
         service.streams["tt9"] = [stream("T", url: nil, infoHash: "h")]
