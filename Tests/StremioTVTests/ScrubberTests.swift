@@ -133,3 +133,22 @@ struct RingTrackerTests {
         #expect(tracker.update(x: 0.9, y: -0.05) == nil)
     }
 }
+
+struct PlaybackProbeTests {
+    @Test func measuresStartupAndCountsOnlyUnintendedSilences() {
+        let start = Date(timeIntervalSince1970: 0)
+        var probe = PlaybackProbe()
+        probe.opened(at: start)
+        #expect(probe.tick(at: start.addingTimeInterval(3)) == nil)
+        #expect(probe.startup == 3)
+        #expect(probe.tick(at: start.addingTimeInterval(3.3)) == nil)
+        // The clock goes silent for 2.5 s while playing: one stall.
+        #expect(probe.tick(at: start.addingTimeInterval(5.8)) == 2.5)
+        #expect(probe.stalls == 1)
+        // A pause is not a stall.
+        probe.clockInterrupted()
+        #expect(probe.tick(at: start.addingTimeInterval(60)) == nil)
+        #expect(probe.stalls == 1)
+        #expect(probe.stalledTime == 2.5)
+    }
+}

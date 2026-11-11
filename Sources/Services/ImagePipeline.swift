@@ -21,6 +21,21 @@ actor ImagePipeline {
         "\(url.absoluteString)@\(Int(maxPixel))" as NSString
     }
 
+    /// TMDB serves every image at several widths. Models carry the large one (`w500` posters, `w1280`
+    /// backdrops); a card needs far less, so fetch the smallest rendition that still covers `maxPixel`
+    /// (the longest displayed side): a third of the bytes to download and decode for a poster on a 1080p TV.
+    nonisolated static func sizedURL(_ url: URL, maxPixel: CGFloat) -> URL {
+        guard url.host == "image.tmdb.org" else { return url }
+        let renditions: [(large: String, small: String, covers: CGFloat)] = [
+            ("/t/p/w500/", "/t/p/w342/", 513),   // 2:3 poster: w342 is 513 px tall
+            ("/t/p/w1280/", "/t/p/w780/", 780),  // 16:9 backdrop: 780 px wide
+        ]
+        for rendition in renditions where maxPixel <= rendition.covers && url.path.hasPrefix(rendition.large) {
+            return URL(string: url.absoluteString.replacingOccurrences(of: rendition.large, with: rendition.small)) ?? url
+        }
+        return url
+    }
+
     nonisolated func cached(_ url: URL, maxPixel: CGFloat) -> UIImage? {
         cache.object(forKey: Self.key(url, maxPixel))
     }
@@ -45,8 +60,9 @@ actor ImagePipeline {
         if let hit = cache.object(forKey: key) { return hit }
         if let running = inFlight[key as String] { return await running.value }
 
+        let source = Self.sizedURL(url, maxPixel: maxPixel)
         let task = Task.detached(priority: .userInitiated) { () -> UIImage? in
-            guard let (data, response) = try? await URLSession.shared.data(from: url),
+            guard let (data, response) = try? await URLSession.shared.data(from: source),
                   (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true
             else { return nil }
             return Self.downsample(data, maxPixel: maxPixel)
@@ -87,7 +103,7 @@ actor ImagePipeline {
         return UIImage(cgImage: cgImage)
     }
 
-    /// Draws `image` aspect-filled on a 16:9 canvas, then the same scrims `BackdropScrim` describes.
+    /// Draws `image` aspect-filled on a 16:9 canvas, then the page scrims (bottom and leading gradients, optional dimming).
     nonisolated static func composeBackdrop(_ image: UIImage, dimming: CGFloat) -> UIImage {
         let size = CGSize(width: 1280, height: 720)
         let format = UIGraphicsImageRendererFormat()

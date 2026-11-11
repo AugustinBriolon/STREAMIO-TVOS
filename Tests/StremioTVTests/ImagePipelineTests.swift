@@ -19,6 +19,17 @@ struct ImagePipelineTests {
         #expect(abs(image.size.width / image.size.height - 2) < 0.02)
     }
 
+    @Test func tmdbImagesAreFetchedAtTheSmallestSizeCoveringTheDisplay() throws {
+        let poster = try #require(URL(string: "https://image.tmdb.org/t/p/w500/abc.jpg"))
+        let backdrop = try #require(URL(string: "https://image.tmdb.org/t/p/w1280/abc.jpg"))
+        let other = try #require(URL(string: "https://images.metahub.space/poster/medium/tt1/img"))
+        #expect(ImagePipeline.sizedURL(poster, maxPixel: 330).absoluteString == "https://image.tmdb.org/t/p/w342/abc.jpg")
+        #expect(ImagePipeline.sizedURL(poster, maxPixel: 660) == poster)
+        #expect(ImagePipeline.sizedURL(backdrop, maxPixel: 400).absoluteString == "https://image.tmdb.org/t/p/w780/abc.jpg")
+        #expect(ImagePipeline.sizedURL(backdrop, maxPixel: 1280) == backdrop)
+        #expect(ImagePipeline.sizedURL(other, maxPixel: 100) == other)
+    }
+
     @Test func downsampleRejectsNonImageData() {
         #expect(ImagePipeline.downsample(Data("not an image".utf8), maxPixel: 500) == nil)
     }

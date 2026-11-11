@@ -26,6 +26,18 @@ final class VLCPlayerEngine: NSObject {
     @ObservationIgnored private let player = VLCMediaPlayer()
     @ObservationIgnored private var lastTimeSample: Double?
     @ObservationIgnored private var didNotifyPlaying = false
+    @ObservationIgnored private var probe = PlaybackProbe()
+
+    /// libVLC network buffer in milliseconds: the wait before playback starts, traded against stalls.
+    static let networkCaching = 4000
+    /// Debug builds can override it at launch (`STREMIO_NETWORK_CACHING`) to compare values on the
+    /// same stream without rebuilding.
+    private static var effectiveNetworkCaching: Int {
+        #if DEBUG
+        if let override = ProcessInfo.processInfo.environment["STREMIO_NETWORK_CACHING"].flatMap(Int.init) { return override }
+        #endif
+        return networkCaching
+    }
 
     override init() {
         super.init()
@@ -40,7 +52,8 @@ final class VLCPlayerEngine: NSObject {
         didNotifyPlaying = false
         currentURL = url
         let media = VLCMedia(url: url)
-        media.addOption(":network-caching=4000")
+        media.addOption(":network-caching=\(Self.effectiveNetworkCaching)")
+        probe.opened(at: Date())
         if let seconds, seconds > 0 { media.addOption(":start-time=\(Int(seconds))") }
         currentTime = seconds ?? 0
         duration = 0
@@ -69,6 +82,7 @@ final class VLCPlayerEngine: NSObject {
     func seek(to seconds: Double) {
         guard player.isSeekable else { return }
         let target = max(0, min(seconds, max(duration - 1, 0)))
+        probe.clockInterrupted()
         player.time = VLCTime(int: Int32(target * 1000))
         currentTime = target
     }
@@ -144,6 +158,7 @@ final class VLCPlayerEngine: NSObject {
             markPlaying()
         case .paused:
             phase = .paused
+            probe.clockInterrupted()
         case .ended:
             phase = .ended
         case .error:
@@ -158,6 +173,7 @@ final class VLCPlayerEngine: NSObject {
     }
 
     fileprivate func timeChanged() {
+        measure()
         let seconds = Double(player.time.intValue) / 1000
         if let lastTimeSample, seconds > lastTimeSample, seconds - lastTimeSample < 5 {
             playedSeconds += seconds - lastTimeSample
@@ -171,6 +187,20 @@ final class VLCPlayerEngine: NSObject {
             phase = .playing
             markPlaying()
         }
+    }
+
+    /// Feeds the probe and, in debug builds, prints its findings (never the stream URL: it embeds a key).
+    private func measure() {
+        let hadStarted = probe.startup != nil
+        let stall = probe.tick(at: Date())
+        #if DEBUG
+        if !hadStarted, let startup = probe.startup {
+            print("[probe] caching=\(Self.effectiveNetworkCaching) startup=\(String(format: "%.2f", startup))s")
+        }
+        if let stall {
+            print("[probe] caching=\(Self.effectiveNetworkCaching) stall=\(String(format: "%.2f", stall))s total=\(probe.stalls)")
+        }
+        #endif
     }
 
     /// First moment the media is really playing (VLC says so, or its clock starts moving): tracks are known.
