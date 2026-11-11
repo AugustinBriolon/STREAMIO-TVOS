@@ -33,9 +33,12 @@ struct LibraryStoreTests {
         #expect(!store.isInMyList(anyOf: aliases))
         #expect(store.myList.isEmpty)
 
-        // Added after resolution under IMDb ID, still recognized from TMDB catalog item
+        // Added after resolution under IMDb ID: a page opened from the TMDB catalog item still finds it,
+        // because it looks the title up with every id it knows (`DetailViewModel.idAliases`).
         store.toggleMyList(canonical, aliases: aliases)
-        #expect(store.isInMyList(anyOf: ["tmdb:12345"]))
+        #expect(store.isInMyList(anyOf: aliases))
+        #expect(store.isInMyList("tt9999999"))
+        #expect(!store.isInMyList("tmdb:12345"))
         #expect(store.myList.count == 1)
     }
 
