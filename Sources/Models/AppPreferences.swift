@@ -58,7 +58,6 @@ public final class AppPreferences {
 
     /// Clé API TMDB (v3) configurée en back pour les métadonnées multilingues et le casting complet.
     public static let tmdbApiKey = "4e44d9029b1270a757cddc766a1bcb63"
-    public static let defaultTMDBKey = tmdbApiKey
 
     private let defaults: UserDefaults
 
