@@ -9,9 +9,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 // MARK: Palette (matches Theme.swift)
-let canvas = CGColor(red: 20 / 255, green: 20 / 255, blue: 20 / 255, alpha: 1)
 let accent = CGColor(red: 229 / 255, green: 9 / 255, blue: 20 / 255, alpha: 1)
-let deepRed = CGColor(red: 56 / 255, green: 6 / 255, blue: 12 / 255, alpha: 1)
 let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1)
 
 // MARK: Rendering helpers
@@ -30,58 +28,36 @@ func render(width: Int, height: Int, opaque: Bool, draw: (CGContext, CGSize) -> 
     return data as Data
 }
 
-func gradient(_ colors: [CGColor], _ locations: [CGFloat]) -> CGGradient {
-    CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!, colors: colors as CFArray, locations: locations)!
-}
-
 // MARK: Drawing pieces, all in a 1280x768 design space then scaled
-/// Back layer: opaque dark background with a deep red glow from the lower right.
+let ink = CGColor(red: 11 / 255, green: 11 / 255, blue: 12 / 255, alpha: 1)
+
+/// Back layer: flat near-black. No glow, no vignette: the mark carries the identity.
 func drawBackground(_ c: CGContext, _ size: CGSize) {
-    c.setFillColor(canvas)
+    c.setFillColor(ink)
     c.fill(CGRect(origin: .zero, size: size))
-    let glow = gradient([accent.copy(alpha: 0.55)!, deepRed.copy(alpha: 0.35)!, canvas.copy(alpha: 0)!], [0, 0.45, 1])
-    c.drawRadialGradient(glow, startCenter: CGPoint(x: size.width * 0.78, y: size.height * 0.12), startRadius: 0,
-                         endCenter: CGPoint(x: size.width * 0.78, y: size.height * 0.12), endRadius: size.width * 0.85, options: [])
-    let vignette = gradient([CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: 0.55)], [0.5, 1])
-    c.drawRadialGradient(vignette, startCenter: CGPoint(x: size.width / 2, y: size.height / 2), startRadius: 0,
-                         endCenter: CGPoint(x: size.width / 2, y: size.height / 2), endRadius: size.width * 0.75, options: .drawsAfterEndLocation)
 }
 
-/// Middle layer: the red ring over a dark disc.
-func drawRing(_ c: CGContext, center: CGPoint, radius: CGFloat) {
-    c.setFillColor(CGColor(red: 14 / 255, green: 14 / 255, blue: 15 / 255, alpha: 0.92))
-    c.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
-    c.saveGState()
-    c.setShadow(offset: .zero, blur: radius * 0.22, color: accent.copy(alpha: 0.7))
-    c.setStrokeColor(accent)
-    c.setLineWidth(radius * 0.16)
-    c.strokeEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
-    c.restoreGState()
-}
-
-/// Front layer: a white play triangle with rounded corners, optically centred.
-func drawPlay(_ c: CGContext, center: CGPoint, height: CGFloat) {
-    let h = height / 2
+/// Middle layer: the "V", one white stroke with round ends. `height` is the letter's height.
+func drawMark(_ c: CGContext, center: CGPoint, height: CGFloat) {
+    let halfWidth = height * 0.5
     let path = CGMutablePath()
-    // Slightly right of centre: a triangle's visual centre is its centroid, not its bounding box.
-    let origin = CGPoint(x: center.x + h * 0.12, y: center.y)
-    path.move(to: CGPoint(x: origin.x - h * 0.62, y: origin.y + h))
-    path.addLine(to: CGPoint(x: origin.x - h * 0.62, y: origin.y - h))
-    path.addLine(to: CGPoint(x: origin.x + h * 0.92, y: origin.y))
-    path.closeSubpath()
-    c.saveGState()
-    c.setShadow(offset: CGSize(width: 0, height: -height * 0.05), blur: height * 0.12, color: CGColor(gray: 0, alpha: 0.5))
-    // One transparency layer: the shadow is cast once by the finished shape. Drawing fill and stroke
-    // separately cast the stroke's shadow onto the fill and greyed the inside of the triangle.
-    c.beginTransparencyLayer(auxiliaryInfo: nil)
-    c.setFillColor(white)
+    path.move(to: CGPoint(x: center.x - halfWidth, y: center.y + height / 2))
+    path.addLine(to: CGPoint(x: center.x, y: center.y - height / 2))
+    path.addLine(to: CGPoint(x: center.x + halfWidth, y: center.y + height / 2))
     c.setStrokeColor(white)
+    c.setLineWidth(height * 0.24)
+    c.setLineCap(.round)
     c.setLineJoin(.round)
-    c.setLineWidth(height * 0.14)
     c.addPath(path)
-    c.drawPath(using: .fillStroke)
-    c.endTransparencyLayer()
-    c.restoreGState()
+    c.strokePath()
+}
+
+/// Front layer: the single red dot held between the arms of the V.
+func drawDot(_ c: CGContext, center: CGPoint, height: CGFloat) {
+    let radius = height * 0.13
+    let dot = CGPoint(x: center.x, y: center.y + height * 0.42)
+    c.setFillColor(accent)
+    c.fillEllipse(in: CGRect(x: dot.x - radius, y: dot.y - radius, width: radius * 2, height: radius * 2))
 }
 
 func drawText(_ c: CGContext, _ string: String, at point: CGPoint, size: CGFloat, weight: NSFont.Weight, color: NSColor, kern: CGFloat = 0) {
@@ -139,11 +115,12 @@ func writeStack(_ url: URL, width: Int, height: Int, scales: [Int], layers: [(na
 let iconCenter = CGPoint(x: 640, y: 384)
 let iconLayers: [(name: String, opaque: Bool, draw: (CGContext, CGSize) -> Void)] = [
     ("Back", true, { c, s in drawBackground(c, s) }),
-    ("Middle", false, { c, _ in drawRing(c, center: iconCenter, radius: 232) }),
-    ("Front", false, { c, _ in drawPlay(c, center: iconCenter, height: 230) }),
+    ("Middle", false, { c, _ in drawMark(c, center: iconCenter, height: 340) }),
+    ("Front", false, { c, _ in drawDot(c, center: iconCenter, height: 340) }),
 ]
 
-try? FileManager.default.removeItem(at: root)
+// Only the generated brand assets: the catalog can hold hand-made images the script does not generate.
+try? FileManager.default.removeItem(at: brand)
 write(["info": info], to: root.appendingPathComponent("Contents.json"))
 
 writeStack(brand.appendingPathComponent("App Icon.imagestack"), width: 400, height: 240, scales: [1, 2], layers: iconLayers)
@@ -152,18 +129,18 @@ writeStack(brand.appendingPathComponent("App Icon - App Store.imagestack"), widt
 // MARK: Top Shelf: logo on the left, wordmark on the right, centred as a group.
 func drawTopShelf(_ c: CGContext, _ size: CGSize) {
     drawBackground(c, size)
-    let ringRadius = size.height * 0.30
+    let ringRadius = size.height * 0.17
     let wordmark = "StremioTV"
-    let font = NSFont.systemFont(ofSize: size.height * 0.2, weight: .heavy)
+    let font = NSFont.systemFont(ofSize: size.height * 0.2, weight: .semibold)
     let textWidth = (wordmark as NSString).size(withAttributes: [.font: font, .kern: -2]).width
     let gap = size.height * 0.14
     let groupWidth = ringRadius * 2 + gap + textWidth
     let startX = (size.width - groupWidth) / 2
     let center = CGPoint(x: startX + ringRadius, y: size.height / 2)
-    drawRing(c, center: center, radius: ringRadius)
-    drawPlay(c, center: center, height: ringRadius * 0.95)
+    drawMark(c, center: center, height: ringRadius * 2)
+    drawDot(c, center: center, height: ringRadius * 2)
     let textX = center.x + ringRadius + gap
-    drawText(c, wordmark, at: CGPoint(x: textX, y: size.height / 2 - size.height * 0.02), size: size.height * 0.2, weight: .heavy,
+    drawText(c, wordmark, at: CGPoint(x: textX, y: size.height / 2 - size.height * 0.02), size: size.height * 0.2, weight: .semibold,
              color: .white, kern: -2)
     drawText(c, "Films et séries sur Apple TV", at: CGPoint(x: textX + 4, y: size.height / 2 - size.height * 0.17), size: size.height * 0.062,
              weight: .medium, color: NSColor(white: 1, alpha: 0.7), kern: 1)
