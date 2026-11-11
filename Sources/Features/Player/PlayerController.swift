@@ -28,10 +28,6 @@ final class PlayerController {
         self.language = language ?? preferences.preferredAudioLanguage
     }
 
-    nonisolated static var deviceLanguage: String {
-        Locale.preferredLanguages.first.map { String($0.prefix(2)) } ?? "fr"
-    }
-
     var nextEpisode: VideoItem? { session?.nextEpisode }
 
     var showsNextEpisode: Bool {

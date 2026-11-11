@@ -7,7 +7,6 @@ public struct AwardCeremonyInfo: Identifiable, Codable, Hashable {
     public let name: String
     public let badge: String
     public let subtitle: String
-    public let emblemName: String
     public let accentColorHex: String
     public let mediaType: String
     public let availableYears: [Int]

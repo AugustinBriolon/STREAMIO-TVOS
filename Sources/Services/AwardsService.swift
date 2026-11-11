@@ -29,7 +29,9 @@ public final class AwardsService {
         }
 
         guard let url = fileURL, let data = try? Data(contentsOf: url) else {
-            print("⚠️ [AwardsService] Impossible de charger AwardsData.json")
+            #if DEBUG
+            print("[AwardsService] AwardsData.json could not be loaded")
+            #endif
             return
         }
 
@@ -37,9 +39,10 @@ public final class AwardsService {
             let decoded = try JSONDecoder().decode(AwardsPayload.self, from: data)
             self.payload = decoded
             buildLookupIndex(from: decoded)
-            print("✨ [AwardsService] Données des cérémonies chargées avec succès (\(decoded.ceremonies.count) cérémonies)")
         } catch {
-            print("❌ [AwardsService] Erreur lors du décodage de AwardsData.json: \(error)")
+            #if DEBUG
+            print("[AwardsService] AwardsData.json could not be decoded: \(error)")
+            #endif
         }
     }
 
@@ -95,16 +98,6 @@ public final class AwardsService {
     /// Liste de toutes les cérémonies disponibles.
     public var ceremonies: [AwardCeremonyInfo] {
         payload?.ceremonies ?? []
-    }
-
-    /// Cérémonies applicables aux films.
-    public var movieCeremonies: [AwardCeremonyInfo] {
-        ceremonies.filter { $0.mediaType == "movie" || $0.mediaType == "all" }
-    }
-
-    /// Cérémonies applicables aux séries.
-    public var seriesCeremonies: [AwardCeremonyInfo] {
-        ceremonies.filter { $0.mediaType == "series" || $0.mediaType == "all" }
     }
 
     /// Obtient les informations d'une cérémonie par son identifiant.

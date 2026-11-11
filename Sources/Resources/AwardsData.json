@@ -5,7 +5,6 @@
       "name": "Academy Awards (Oscars)",
       "badge": "Statuette d'Or",
       "subtitle": "Les plus prestigieuses récompenses du cinéma mondial depuis 1928",
-      "emblemName": "ceremony-oscars",
       "accentColorHex": "#FFD700",
       "mediaType": "movie",
       "availableYears": [
@@ -115,7 +114,6 @@
       "name": "Primetime Emmy Awards",
       "badge": "L'Élite de la Télévision",
       "subtitle": "Les séries, comédies et mini-séries les plus célébrées de l'histoire",
-      "emblemName": "ceremony-emmys",
       "accentColorHex": "#E5C158",
       "mediaType": "series",
       "availableYears": [
@@ -181,7 +179,6 @@
       "name": "Golden Globe Awards",
       "badge": "Cinéma & Télévision",
       "subtitle": "Le rendez-vous glamour couronnant films et séries majeurs depuis 1944",
-      "emblemName": "ceremony-goldenglobes",
       "accentColorHex": "#F5B041",
       "mediaType": "all",
       "availableYears": [
@@ -272,7 +269,6 @@
       "name": "Festival de Cannes",
       "badge": "Palme d'Or & Croisette",
       "subtitle": "Le plus grand festival du monde et l'apogée du cinéma d'auteur depuis 1946",
-      "emblemName": "ceremony-cannes",
       "accentColorHex": "#D4AF37",
       "mediaType": "movie",
       "availableYears": [
@@ -359,7 +355,6 @@
       "name": "César du Cinéma",
       "badge": "Cinéma Français",
       "subtitle": "La grande fête annuelle récompensant le cinéma hexagonal depuis 1976",
-      "emblemName": "ceremony-cesar",
       "accentColorHex": "#C5A059",
       "mediaType": "movie",
       "availableYears": [
