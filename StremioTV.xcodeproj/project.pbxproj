@@ -7,12 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		006E0982BE6F409465BDB117 /* ResolvingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9CA4761D19574505F44D41 /* ResolvingView.swift */; };
 		03E2967F6C4B533F9266A5DD /* PlaybackFocusRestorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A63902BA77C0B4B0D7B6EE4 /* PlaybackFocusRestorer.swift */; };
 		051E61E73EB7B2D8AF46A005 /* AwardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1C8C05DE6BE3FD6CF8343A /* AwardModels.swift */; };
 		07C7E92F9F3EDE7DFB77A968 /* ConfigPortal.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC8B7DB0B4C2E5D19BA759F /* ConfigPortal.swift */; };
 		081E2EDF482C6C9270331FE0 /* AwardNomineeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257DCCD869A3AD8DAFB63489 /* AwardNomineeCard.swift */; };
 		08903113D7E1137C8C9A3F1E /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33773047D2FE939EC8FFAE80 /* LibraryStore.swift */; };
 		1257CD03865DC86F0945D83B /* TopShelfRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C215C08CED11935BCCB26A0 /* TopShelfRefresher.swift */; };
+		13A0FD8F6B526DD54FF3A2A1 /* PlaybackProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = C477B573A2237520DD595794 /* PlaybackProbe.swift */; };
 		180BE55732F5ADC3867F9709 /* PersonDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D65132225CF9148DD5D0E5BB /* PersonDetailTests.swift */; };
 		191983D4C58E949745D53C9A /* StremioModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11128E42B86D0D008CFCAAA2 /* StremioModels.swift */; };
 		1B3BD075A3D7A585319C230C /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9133004FCB63B98A0D603CE9 /* ButtonStyles.swift */; };
@@ -66,7 +68,6 @@
 		81F64847F08599741F508E34 /* Artwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B68EE4F14BD2939929930 /* Artwork.swift */; };
 		82348258C172EDCEB1D6A3C0 /* SagaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 802C5B45A800BF0511B396AA /* SagaDetailView.swift */; };
 		82DA5BC90938108FD9F2E860 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 328B491645F61A663495F0A0 /* AppGroup.swift */; };
-		84746C58C6AF1BFA9537F280 /* DiscoveryBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = A77BE6D2D93F2E83B72000DC /* DiscoveryBadges.swift */; };
 		8761C7C50CC62105A4B0BE32 /* HTTPRequestParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907ECDB6B0B97BB42516CF86 /* HTTPRequestParserTests.swift */; };
 		88B1ABD24BF5359341696D64 /* StreamsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4EF31D09D86030F7C22D5A9 /* StreamsView.swift */; };
 		8DFE5C6F6078BB7596A08513 /* DiscoveryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DF70C329189F6AD44B85E1 /* DiscoveryModels.swift */; };
@@ -93,6 +94,7 @@
 		BA5FF09B826746FA361BF32D /* ViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67FE45625612823338B2B03B /* ViewModelTests.swift */; };
 		BC4CA39DB331E63E86EBC669 /* CloudSyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E8F52BA4B6CDC3F35966677 /* CloudSyncEngine.swift */; };
 		BD5E32542066DFBB9202EB93 /* StremioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74C3F2DDFFD5A04B6FA3D612 /* StremioService.swift */; };
+		BE30FE55D59525F239B3C65A /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE38FC55ECEA5849C873CD76 /* Skeleton.swift */; };
 		BECE8392B8A886B29CA8CF27 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4206F1D92DD12CC6D881E3F /* PlayerView.swift */; };
 		C053EC16540B47E84743121E /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6997C8BF52513AB4B67FA4E /* AppTab.swift */; };
 		C1E7EC34F45226F57CD75883 /* FocusNeighbor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5936F2459E17666B17B758BB /* FocusNeighbor.swift */; };
@@ -235,7 +237,6 @@
 		A18DF7FA6C07CBA59C993210 /* EpisodeNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeNavigationTests.swift; sourceTree = "<group>"; };
 		A35251EBE35B59C186F3AE64 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		A4B3E7A8B412E07CDF8C8983 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Vendor/TVVLCKit.xcframework; sourceTree = "<group>"; };
-		A77BE6D2D93F2E83B72000DC /* DiscoveryBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryBadges.swift; sourceTree = "<group>"; };
 		A9D74DD8CBD7250FBAC4824D /* SagaCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SagaCard.swift; sourceTree = "<group>"; };
 		ADA543D161A43A2836009704 /* MyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyListView.swift; sourceTree = "<group>"; };
 		B05B4F84E6C8AAC4889E6224 /* AppPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferencesTests.swift; sourceTree = "<group>"; };
@@ -244,7 +245,9 @@
 		B962B75E3E6D6F04FAA59C9C /* StremioTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = StremioTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA60A32A86B072CE28A14FBA /* NavigationRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationRouterTests.swift; sourceTree = "<group>"; };
 		BAC553AF7A19FBDED1A2C79F /* NavigationRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationRouter.swift; sourceTree = "<group>"; };
+		BB9CA4761D19574505F44D41 /* ResolvingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResolvingView.swift; sourceTree = "<group>"; };
 		C2C987CC494D57434478DDD1 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		C477B573A2237520DD595794 /* PlaybackProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackProbe.swift; sourceTree = "<group>"; };
 		C4D425C9747B554A9C2AA8C5 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
 		C5FE9C78B7B07C7CFC5D35DA /* TopShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopShelf.swift; sourceTree = "<group>"; };
 		C65EFC384BD3A195DEEEFA60 /* TrackSelectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackSelectorTests.swift; sourceTree = "<group>"; };
@@ -261,6 +264,7 @@
 		D65132225CF9148DD5D0E5BB /* PersonDetailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonDetailTests.swift; sourceTree = "<group>"; };
 		D93358B69DCF29A0F3F23EBA /* PairingModalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingModalSheet.swift; sourceTree = "<group>"; };
 		DDF09DB9B342708078378DDD /* DetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailViewModel.swift; sourceTree = "<group>"; };
+		DE38FC55ECEA5849C873CD76 /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		E2B3F69D2CAADB6B14A80772 /* AddonStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonStoreTests.swift; sourceTree = "<group>"; };
 		E7E5AA3C635EABB032A59D97 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		EA96F340F644387158C676FC /* PlaybackCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -374,13 +378,13 @@
 				9133004FCB63B98A0D603CE9 /* ButtonStyles.swift */,
 				1AB08B7C97F33C665141655E /* Cards.swift */,
 				69C2133821DE408032C6F0F9 /* CastCard.swift */,
-				A77BE6D2D93F2E83B72000DC /* DiscoveryBadges.swift */,
 				0BA870025D067FC2C50D54ED /* DynamicBackdrop.swift */,
 				353BF0D1804DD3045D7FCFEB /* Labels.swift */,
 				D649B46601BF4C2D30A2786B /* ProfileAvatarView.swift */,
 				EB56F732DD97309208FC725F /* RemoteTiltModel.swift */,
 				A9D74DD8CBD7250FBAC4824D /* SagaCard.swift */,
 				7F64A2FE6B96BEDFB9363834 /* ShelfRow.swift */,
+				DE38FC55ECEA5849C873CD76 /* Skeleton.swift */,
 				6772A2E7F7731C2A80B6F92A /* StateView.swift */,
 			);
 			path = Components;
@@ -505,9 +509,11 @@
 			children = (
 				F65D0347C319E6E42DE27CCA /* PlaybackCoordinator.swift */,
 				2A63902BA77C0B4B0D7B6EE4 /* PlaybackFocusRestorer.swift */,
+				C477B573A2237520DD595794 /* PlaybackProbe.swift */,
 				6BCE843DC166E3E768882BB8 /* PlayerController.swift */,
 				D4206F1D92DD12CC6D881E3F /* PlayerView.swift */,
 				5EC6465B545D5602E2F49B25 /* RemoteRingInput.swift */,
+				BB9CA4761D19574505F44D41 /* ResolvingView.swift */,
 				1A6C40E1D1ABECE1A14F1CAC /* Scrubber.swift */,
 				9EE486CCF91AA97C8AECA071 /* ThumbnailProvider.swift */,
 				36DC60E7D5625933AF203BEC /* TrackDisplay.swift */,
@@ -761,7 +767,6 @@
 				966791C60B0550E5A0E59537 /* ConfigServer.swift in Sources */,
 				99C02167B84CDFBD7C3036D9 /* DetailView.swift in Sources */,
 				C556DDD0BA42DF1AE141E3F5 /* DetailViewModel.swift in Sources */,
-				84746C58C6AF1BFA9537F280 /* DiscoveryBadges.swift in Sources */,
 				8DFE5C6F6078BB7596A08513 /* DiscoveryModels.swift in Sources */,
 				A2E0AC3D61535322AE2182DE /* DynamicBackdrop.swift in Sources */,
 				C1E7EC34F45226F57CD75883 /* FocusNeighbor.swift in Sources */,
@@ -781,6 +786,7 @@
 				35E2F4E3976531C220E047D1 /* PersonDetailViewModel.swift in Sources */,
 				A62CF8312899721B54D4DD0D /* PlaybackCoordinator.swift in Sources */,
 				03E2967F6C4B533F9266A5DD /* PlaybackFocusRestorer.swift in Sources */,
+				13A0FD8F6B526DD54FF3A2A1 /* PlaybackProbe.swift in Sources */,
 				61C75CEE171B9BA771EA533A /* PlaybackProgress.swift in Sources */,
 				D2FC875F3F5F5C389057E082 /* PlayerController.swift in Sources */,
 				BECE8392B8A886B29CA8CF27 /* PlayerView.swift in Sources */,
@@ -791,6 +797,7 @@
 				59213AC2A98795BAA21AEE29 /* ProfilesView.swift in Sources */,
 				33C96AD0F51F33B21F911BB4 /* RemoteRingInput.swift in Sources */,
 				95AE37EC438173D47A13067F /* RemoteTiltModel.swift in Sources */,
+				006E0982BE6F409465BDB117 /* ResolvingView.swift in Sources */,
 				6F281F3A2D32B3CBDDF6EE76 /* RootView.swift in Sources */,
 				55FCECCFC398D9BFBF25EF3F /* SagaCard.swift in Sources */,
 				82348258C172EDCEB1D6A3C0 /* SagaDetailView.swift in Sources */,
@@ -799,6 +806,7 @@
 				27E1D6D6F4B413A5817989F5 /* SearchViewModel.swift in Sources */,
 				F653D9B9B1EA94AD15F0ED5F /* SettingsView.swift in Sources */,
 				B58633754902197C489E8939 /* ShelfRow.swift in Sources */,
+				BE30FE55D59525F239B3C65A /* Skeleton.swift in Sources */,
 				6AC7F4D0FF6BA453C2874778 /* StateView.swift in Sources */,
 				430AA6AB80BAE891107E7E40 /* StreamItem.swift in Sources */,
 				A39D299923BC6B6F5037FEBA /* StreamRanker.swift in Sources */,
