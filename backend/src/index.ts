@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker Backend for StremioTV
+ * Cloudflare Worker Backend for Loge
  * Handles Authentication, Device Flow Pairing (QR Code), and Multi-Device Cloud Sync.
  */
 
@@ -17,9 +17,10 @@ async function hashPassword(password: string): Promise<string> {
     .join('');
 }
 
-async function generateToken(accountId: string, secret: string): Promise<string> {
+async function generateToken(accountId: string, secret: string, sessionId: string): Promise<string> {
   const payload = {
     sub: accountId,
+    sid: sessionId,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365, // 1 an
   };
@@ -37,7 +38,13 @@ async function generateToken(accountId: string, secret: string): Promise<string>
   return `${str}.${sigStr}`;
 }
 
-async function verifyToken(token: string, secret: string): Promise<string | null> {
+interface TokenClaims {
+  accountId: string;
+  /** Null for tokens issued before device sessions existed (ADR 0022): they stay valid until they expire. */
+  sessionId: string | null;
+}
+
+async function verifyToken(token: string, secret: string): Promise<TokenClaims | null> {
   try {
     const [payloadStr, sigStr] = token.split('.');
     if (!payloadStr || !sigStr) return null;
@@ -54,10 +61,152 @@ async function verifyToken(token: string, secret: string): Promise<string | null
     if (!valid) return null;
     const payload = JSON.parse(atob(payloadStr));
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload.sub;
+    return { accountId: payload.sub, sessionId: payload.sid ?? null };
   } catch {
     return null;
   }
+}
+
+/** Writing last-seen on every request would cost a D1 write per call; once every few minutes is enough for a device list. */
+const LAST_SEEN_RESOLUTION_MS = 5 * 60 * 1000;
+
+/** A valid signature is not enough: the token's device session must not have been revoked. */
+async function authenticate(token: string, env: Env): Promise<TokenClaims | null> {
+  const claims = await verifyToken(token, env.JWT_SECRET);
+  if (!claims || !claims.sessionId) return claims;
+  const session: any = await env.DB.prepare(
+    'SELECT revoked_at_ms, last_seen_at_ms FROM sessions WHERE id = ? AND account_id = ?'
+  ).bind(claims.sessionId, claims.accountId).first();
+  if (!session || session.revoked_at_ms != null) return null;
+  const now = Date.now();
+  if (now - (session.last_seen_at_ms || 0) > LAST_SEEN_RESOLUTION_MS) {
+    await env.DB.prepare('UPDATE sessions SET last_seen_at_ms = ? WHERE id = ?').bind(now, claims.sessionId).run();
+  }
+  return claims;
+}
+
+function cleanLabel(value: unknown, fallback: string): string {
+  const text = typeof value === 'string' ? value.trim().slice(0, 60) : '';
+  return text || fallback;
+}
+
+/** Opens a device session and returns a token bound to it. */
+async function openSession(
+  env: Env,
+  accountId: string,
+  deviceName: unknown,
+  deviceModel: unknown
+): Promise<{ token: string; sessionId: string }> {
+  const sessionId = crypto.randomUUID();
+  const now = Date.now();
+  await env.DB.prepare(
+    'INSERT INTO sessions (id, account_id, device_name, device_model, created_at_ms, last_seen_at_ms) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(sessionId, accountId, cleanLabel(deviceName, 'Navigateur web'), cleanLabel(deviceModel, ''), now, now).run();
+  return { sessionId, token: await generateToken(accountId, env.JWT_SECRET, sessionId) };
+}
+
+async function issueToken(env: Env, accountId: string, deviceName: unknown, deviceModel: unknown): Promise<string> {
+  return (await openSession(env, accountId, deviceName, deviceModel)).token;
+}
+
+/** Prefer the client header; otherwise the last pairing name (Apple TV sends UIDevice.current.name there). */
+async function resolveDeviceIdentity(
+  env: Env,
+  accountId: string,
+  request: Request
+): Promise<{ name: string; model: string }> {
+  const headerName = (request.headers.get('X-Device-Name') || '').trim();
+  const headerModel = (request.headers.get('X-Device-Model') || '').trim();
+  if (headerName) {
+    return { name: cleanLabel(headerName, 'Apple TV'), model: cleanLabel(headerModel, '') };
+  }
+  const paired: any = await env.DB.prepare(
+    `SELECT device_name FROM pairing_codes
+     WHERE account_id = ? AND IFNULL(device_name, '') != ''
+     ORDER BY expires_at DESC LIMIT 1`
+  ).bind(accountId).first();
+  if (paired?.device_name) {
+    return { name: cleanLabel(paired.device_name, 'Apple TV'), model: '' };
+  }
+  return { name: 'Apple TV', model: '' };
+}
+
+/** Keep the listed name in sync when the device starts sending X-Device-* headers. */
+async function refreshSessionIdentity(env: Env, sessionId: string, request: Request): Promise<void> {
+  const headerName = (request.headers.get('X-Device-Name') || '').trim();
+  if (!headerName) return;
+  const name = cleanLabel(headerName, '');
+  const model = cleanLabel(request.headers.get('X-Device-Model'), '');
+  if (!name) return;
+  await env.DB.prepare(
+    `UPDATE sessions SET
+       device_name = ?,
+       device_model = CASE WHEN ? != '' THEN ? ELSE device_model END,
+       last_seen_at_ms = ?
+     WHERE id = ?`
+  ).bind(name, model, model, Date.now(), sessionId).run();
+}
+
+/** Pre-ADR-0022 JWTs have no sid: mint a session so the device list is not empty forever. */
+async function upgradeLegacySession(
+  env: Env,
+  session: TokenClaims,
+  request: Request
+): Promise<{ sessionId: string; token: string } | null> {
+  if (session.sessionId) {
+    await refreshSessionIdentity(env, session.sessionId, request);
+    return null;
+  }
+  const { name: deviceName, model: deviceModel } = await resolveDeviceIdentity(env, session.accountId, request);
+
+  // Reuse by name so a legacy client that never stores the new token does not spawn a row per request.
+  let existing: any = await env.DB.prepare(
+    'SELECT id FROM sessions WHERE account_id = ? AND revoked_at_ms IS NULL AND device_name = ? ORDER BY last_seen_at_ms DESC LIMIT 1'
+  ).bind(session.accountId, deviceName).first();
+
+  // Claim the placeholder row created before we had a real name.
+  if (!existing?.id && deviceName !== 'Appareil') {
+    existing = await env.DB.prepare(
+      `SELECT id FROM sessions
+       WHERE account_id = ? AND revoked_at_ms IS NULL AND device_name = 'Appareil'
+       ORDER BY last_seen_at_ms DESC LIMIT 1`
+    ).bind(session.accountId).first();
+  }
+
+  if (existing?.id) {
+    const now = Date.now();
+    await env.DB.prepare(
+      `UPDATE sessions SET
+         device_name = ?,
+         device_model = CASE WHEN ? != '' THEN ? ELSE device_model END,
+         last_seen_at_ms = ?
+       WHERE id = ?`
+    ).bind(deviceName, deviceModel, deviceModel, now, existing.id).run();
+    return { sessionId: existing.id, token: await generateToken(session.accountId, env.JWT_SECRET, existing.id) };
+  }
+  return openSession(env, session.accountId, deviceName, deviceModel);
+}
+
+/** Profile ids deleted on any device or on the web: they must never be recreated by a later push. */
+async function deletedProfileIds(env: Env, accountId: string): Promise<Set<string>> {
+  const rows = await env.DB.prepare(
+    "SELECT entity_id FROM sync_tombstones WHERE account_id = ? AND entity_type = 'profile'"
+  ).bind(accountId).all();
+  return new Set(rows.results.map((r: any) => r.entity_id));
+}
+
+async function deleteProfileEverywhere(env: Env, accountId: string, profileId: string, deletedAtMs: number) {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM profiles WHERE account_id = ? AND id = ?').bind(accountId, profileId),
+    env.DB.prepare('DELETE FROM my_list WHERE account_id = ? AND profile_id = ?').bind(accountId, profileId),
+    env.DB.prepare('DELETE FROM playback_progress WHERE account_id = ? AND profile_id = ?').bind(accountId, profileId),
+    env.DB.prepare(`
+      INSERT INTO sync_tombstones (account_id, profile_id, entity_type, entity_id, deleted_at_ms)
+      VALUES (?, ?, 'profile', ?, ?)
+      ON CONFLICT(account_id, profile_id, entity_type, entity_id) DO UPDATE SET
+        deleted_at_ms = MAX(deleted_at_ms, excluded.deleted_at_ms)
+    `).bind(accountId, profileId, profileId, deletedAtMs),
+  ]);
 }
 
 function json(data: any, status = 200): Response {
@@ -67,7 +216,7 @@ function json(data: any, status = 200): Response {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Name, X-Device-Model',
     },
   });
 }
@@ -81,7 +230,7 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Name, X-Device-Model',
         },
       });
     }
@@ -94,13 +243,25 @@ export default {
       });
     }
 
+    if (url.pathname === '/privacy') {
+      return new Response(privacyPolicyHTML, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+
+    if (url.pathname === '/support') {
+      return new Response(supportHTML, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+
     // Helper auth header
     const authHeader = request.headers.get('Authorization') || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
 
     // MARK: - POST /api/auth/register
     if (url.pathname === '/api/auth/register' && request.method === 'POST') {
-      const { email, password } = (await request.json()) as any;
+      const { email, password, deviceName, deviceModel } = (await request.json()) as any;
       if (!email || !password || password.length < 6) {
         return json({ error: 'Email invalide ou mot de passe trop court (6 car. min).' }, 400);
       }
@@ -114,13 +275,13 @@ export default {
         .bind(accountId, email.toLowerCase(), pwHash)
         .run();
 
-      const jwt = await generateToken(accountId, env.JWT_SECRET);
+      const jwt = await issueToken(env, accountId, deviceName, deviceModel);
       return json({ token: jwt, accountId, email: email.toLowerCase() });
     }
 
     // MARK: - POST /api/auth/login
     if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-      const { email, password } = (await request.json()) as any;
+      const { email, password, deviceName, deviceModel } = (await request.json()) as any;
       if (!email || !password) return json({ error: 'Identifiants requis.' }, 400);
       const pwHash = await hashPassword(password);
       const account: any = await env.DB.prepare('SELECT id, email FROM accounts WHERE email = ? AND password_hash = ?')
@@ -129,7 +290,7 @@ export default {
       if (!account) {
         return json({ error: 'Email ou mot de passe incorrect.' }, 401);
       }
-      const jwt = await generateToken(account.id, env.JWT_SECRET);
+      const jwt = await issueToken(env, account.id, deviceName, deviceModel);
       return json({ token: jwt, accountId: account.id, email: account.email });
     }
 
@@ -154,11 +315,11 @@ export default {
 
     // MARK: - POST /api/device/poll (Apple TV vérifie si le code a été validé)
     if (url.pathname === '/api/device/poll' && request.method === 'POST') {
-      const { code } = (await request.json()) as any;
+      const { code, deviceName, deviceModel } = (await request.json()) as any;
       if (!code) return json({ error: 'Code requis' }, 400);
 
       const entry: any = await env.DB.prepare(
-        'SELECT account_id, status, expires_at FROM pairing_codes WHERE code = ?'
+        'SELECT account_id, status, expires_at, device_name FROM pairing_codes WHERE code = ?'
       )
         .bind(code)
         .first();
@@ -169,11 +330,20 @@ export default {
         return json({ status: 'expired' });
       }
 
+      if (entry.status === 'consumed') {
+        return json({ status: 'expired' });
+      }
+
       if (entry.status === 'authorized' && entry.account_id) {
+        // A code yields one token: replaying the poll must not open a second session.
+        const consumed = await env.DB.prepare(
+          "UPDATE pairing_codes SET status = 'consumed' WHERE code = ? AND status = 'authorized'"
+        ).bind(code).run();
+        if (consumed.meta.changes === 0) return json({ status: 'expired' });
         const account: any = await env.DB.prepare('SELECT email FROM accounts WHERE id = ?')
           .bind(entry.account_id)
           .first();
-        const jwt = await generateToken(entry.account_id, env.JWT_SECRET);
+        const jwt = await issueToken(env, entry.account_id, deviceName || entry.device_name, deviceModel);
         return json({ status: 'authorized', token: jwt, email: account?.email });
       }
 
@@ -182,7 +352,8 @@ export default {
 
     // MARK: - POST /api/device/confirm (Le navigateur du smartphone confirme l'appairage)
     if (url.pathname === '/api/device/confirm' && request.method === 'POST') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { code } = (await request.json()) as any;
@@ -203,8 +374,11 @@ export default {
 
     // MARK: - GET /api/account (Données du compte connecté pour le web)
     if (url.pathname === '/api/account' && request.method === 'GET') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
-      if (!accountId) return json({ error: 'Non authentifié' }, 401);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
+      if (!accountId || !session) return json({ error: 'Non authentifié' }, 401);
+
+      const upgraded = await upgradeLegacySession(env, session, request);
 
       const account: any = await env.DB.prepare('SELECT email, nickname FROM accounts WHERE id = ?')
         .bind(accountId)
@@ -223,12 +397,14 @@ export default {
         nickname: account?.nickname || '',
         profiles: profiles.results,
         addons: addons.results.map((r: any) => r.manifest_url),
+        ...(upgraded ? { token: upgraded.token } : {}),
       });
     }
 
     // MARK: - POST /api/account/nickname
     if (url.pathname === '/api/account/nickname' && request.method === 'POST') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { nickname } = (await request.json().catch(() => ({}))) as any;
@@ -243,7 +419,8 @@ export default {
 
     // MARK: - POST /api/account/password
     if (url.pathname === '/api/account/password' && request.method === 'POST') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { currentPassword, newPassword } = (await request.json().catch(() => ({}))) as any;
@@ -273,15 +450,28 @@ export default {
 
     // MARK: - POST /api/account/profile (Créer ou modifier un profil)
     if (url.pathname === '/api/account/profile' && request.method === 'POST') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { id, name, avatar } = (await request.json().catch(() => ({}))) as any;
       const cleanName = (name || '').trim();
       if (!cleanName) return json({ error: 'Le nom du profil ne peut pas être vide.' }, 400);
+      if (cleanName.length > 16) return json({ error: 'Le nom est trop long (16 caractères maximum).' }, 400);
 
       const profileId = id || crypto.randomUUID();
-      const avatarJson = avatar ? JSON.stringify(avatar) : JSON.stringify({ color: 'blue', symbol: 'face.smiling' });
+      let avatarJson: string;
+      if (avatar && typeof avatar === 'object') {
+        avatarJson = JSON.stringify(avatar);
+      } else if (id) {
+        // Rename-only updates must keep the existing avatar (TV contract).
+        const existing: any = await env.DB.prepare(
+          'SELECT avatar_json FROM profiles WHERE account_id = ? AND id = ?'
+        ).bind(accountId, id).first();
+        avatarJson = existing?.avatar_json || JSON.stringify({ color: 'blue', symbol: 'face.smiling' });
+      } else {
+        avatarJson = JSON.stringify({ color: 'blue', symbol: 'face.smiling' });
+      }
 
       if (!id) {
         const countRes: any = await env.DB.prepare('SELECT count(*) as c FROM profiles WHERE account_id = ?').bind(accountId).first();
@@ -304,7 +494,8 @@ export default {
 
     // MARK: - DELETE /api/account/profile
     if (url.pathname === '/api/account/profile' && request.method === 'DELETE') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { id } = (await request.json().catch(() => ({}))) as any;
@@ -315,16 +506,15 @@ export default {
         return json({ error: 'Impossible de supprimer le dernier profil restant.' }, 400);
       }
 
-      await env.DB.prepare('DELETE FROM profiles WHERE account_id = ? AND id = ?')
-        .bind(accountId, id)
-        .run();
+      await deleteProfileEverywhere(env, accountId, id, Date.now());
 
       return json({ success: true });
     }
 
     // MARK: - POST /api/account/addons
     if (url.pathname === '/api/account/addons' && request.method === 'POST') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { manifestUrl } = (await request.json().catch(() => ({}))) as any;
@@ -342,7 +532,8 @@ export default {
 
     // MARK: - DELETE /api/account/addons
     if (url.pathname === '/api/account/addons' && request.method === 'DELETE') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
       if (!accountId) return json({ error: 'Non authentifié' }, 401);
 
       const { manifestUrl } = (await request.json().catch(() => ({}))) as any;
@@ -357,8 +548,10 @@ export default {
 
     // MARK: - GET /api/sync/pull (Récupération des données du foyer)
     if (url.pathname === '/api/sync/pull' && request.method === 'GET') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
-      if (!accountId) return json({ error: 'Non authentifié' }, 401);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
+      if (!accountId || !session) return json({ error: 'Non authentifié' }, 401);
+      const upgraded = await upgradeLegacySession(env, session, request);
 
       const profiles = await env.DB.prepare('SELECT id, name, avatar_json, sort_order FROM profiles WHERE account_id = ? ORDER BY sort_order ASC')
         .bind(accountId)
@@ -384,30 +577,49 @@ export default {
         .filter((r: any) => r.entity_type === 'progress')
         .map((r: any) => ({ profile_id: r.profile_id, video_id: r.entity_id, deleted_at_ms: r.deleted_at_ms }));
 
+      const deletedProfiles = tombstones.results
+        .filter((r: any) => r.entity_type === 'profile')
+        .map((r: any) => ({ id: r.entity_id, deleted_at_ms: r.deleted_at_ms }));
+
       const addons = await env.DB.prepare('SELECT manifest_url FROM addons WHERE account_id = ?')
         .bind(accountId)
         .all();
 
       return json({
         profiles: profiles.results,
+        deletedProfiles,
         progress: progress.results,
         myList: myList.results,
         deletedMyList,
         deletedProgress,
         addons: addons.results.map((r: any) => r.manifest_url),
+        ...(upgraded ? { token: upgraded.token } : {}),
       });
     }
 
     // MARK: - POST /api/sync/push (Envoi des modifications locales de l'Apple TV)
     if (url.pathname === '/api/sync/push' && request.method === 'POST') {
-      const accountId = await verifyToken(token, env.JWT_SECRET);
-      if (!accountId) return json({ error: 'Non authentifié' }, 401);
+      const session = await authenticate(token, env);
+      const accountId = session?.accountId;
+      if (!accountId || !session) return json({ error: 'Non authentifié' }, 401);
+      const upgraded = await upgradeLegacySession(env, session, request);
 
       const data = (await request.json()) as any;
 
+      // 0. Profils supprimés (tombstones) : appliqués avant tout le reste
+      if (Array.isArray(data.deletedProfiles)) {
+        for (const del of data.deletedProfiles) {
+          if (!del.id) continue;
+          const delMs = typeof del.deletedAtMs === 'number' ? del.deletedAtMs : Date.now();
+          await deleteProfileEverywhere(env, accountId, del.id, delMs);
+        }
+      }
+      const deletedProfiles = await deletedProfileIds(env, accountId);
+      const isLive = (profileId: string) => !deletedProfiles.has(profileId);
+
       // 1. Profils
       if (Array.isArray(data.profiles)) {
-        for (const p of data.profiles) {
+        for (const p of data.profiles.filter((p: any) => isLive(p.id))) {
           await env.DB.prepare(`
             INSERT INTO profiles (account_id, id, name, avatar_json, sort_order, updated_at)
             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -422,7 +634,7 @@ export default {
 
       // 2a. Suppressions de progression de lecture (tombstones)
       if (Array.isArray(data.deletedProgress)) {
-        for (const del of data.deletedProgress) {
+        for (const del of data.deletedProgress.filter((d: any) => isLive(d.profileId))) {
           if (!del.profileId || !del.videoId) continue;
           const delMs = typeof del.deletedAtMs === 'number' ? del.deletedAtMs : Date.now();
           const existing: any = await env.DB.prepare(
@@ -446,7 +658,7 @@ export default {
 
       // 2b. Progression de lecture
       if (Array.isArray(data.progress)) {
-        for (const pr of data.progress) {
+        for (const pr of data.progress.filter((p: any) => isLive(p.profileId))) {
           const itemJson = typeof pr.item === 'string' ? pr.item : JSON.stringify(pr.item);
           const updatedAtMs = typeof pr.updatedAtMs === 'number' ? pr.updatedAtMs : Date.now();
           const tomb: any = await env.DB.prepare(
@@ -477,7 +689,7 @@ export default {
 
       // 3a. Suppressions de Ma liste (tombstones)
       if (Array.isArray(data.deletedMyList)) {
-        for (const del of data.deletedMyList) {
+        for (const del of data.deletedMyList.filter((d: any) => isLive(d.profileId))) {
           if (!del.profileId || !del.itemId) continue;
           const delMs = typeof del.deletedAtMs === 'number' ? del.deletedAtMs : Date.now();
           const existing: any = await env.DB.prepare(
@@ -501,7 +713,7 @@ export default {
 
       // 3b. Ma liste
       if (Array.isArray(data.myList)) {
-        for (const ml of data.myList) {
+        for (const ml of data.myList.filter((m: any) => isLive(m.profileId))) {
           const itemJson = typeof ml.item === 'string' ? ml.item : JSON.stringify(ml.item);
           const addedAtMs = typeof ml.addedAtMs === 'number' ? ml.addedAtMs : Date.now();
           const tomb: any = await env.DB.prepare(
@@ -538,7 +750,67 @@ export default {
         }
       }
 
-      return json({ success: true, timestamp: new Date().toISOString() });
+      return json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        ...(upgraded ? { token: upgraded.token } : {}),
+      });
+    }
+
+    // MARK: - POST /api/auth/logout (revokes this device's session)
+    if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+      const session = await authenticate(token, env);
+      if (session?.sessionId) {
+        await env.DB.prepare('UPDATE sessions SET revoked_at_ms = ? WHERE id = ? AND revoked_at_ms IS NULL')
+          .bind(Date.now(), session.sessionId)
+          .run();
+      }
+      return json({ success: true });
+    }
+
+    // MARK: - GET /api/devices (devices signed in to the account)
+    if (url.pathname === '/api/devices' && request.method === 'GET') {
+      const session = await authenticate(token, env);
+      if (!session) return json({ error: 'Non authentifié' }, 401);
+      const upgraded = await upgradeLegacySession(env, session, request);
+      const currentSessionId = upgraded?.sessionId ?? session.sessionId;
+      const rows = await env.DB.prepare(
+        'SELECT id, device_name, device_model, created_at_ms, last_seen_at_ms FROM sessions WHERE account_id = ? AND revoked_at_ms IS NULL ORDER BY last_seen_at_ms DESC'
+      ).bind(session.accountId).all();
+      return json({
+        devices: rows.results.map((r: any) => ({
+          id: r.id,
+          name: r.device_name,
+          model: r.device_model || null,
+          createdAtMs: r.created_at_ms,
+          lastSeenAtMs: r.last_seen_at_ms,
+          isCurrent: !!currentSessionId && r.id === currentSessionId,
+        })),
+        ...(upgraded ? { token: upgraded.token } : {}),
+      });
+    }
+
+    // MARK: - POST /api/devices/revoke (signs one device out)
+    if (url.pathname === '/api/devices/revoke' && request.method === 'POST') {
+      const session = await authenticate(token, env);
+      if (!session) return json({ error: 'Non authentifié' }, 401);
+      const { id } = (await request.json().catch(() => ({}))) as any;
+      if (!id) return json({ error: 'Identifiant d\'appareil requis.' }, 400);
+      const res = await env.DB.prepare(
+        'UPDATE sessions SET revoked_at_ms = ? WHERE id = ? AND account_id = ? AND revoked_at_ms IS NULL'
+      ).bind(Date.now(), id, session.accountId).run();
+      if (res.meta.changes === 0) return json({ error: 'Appareil introuvable.' }, 404);
+      return json({ success: true });
+    }
+
+    // MARK: - POST /api/devices/revoke-others (signs out every device but this one)
+    if (url.pathname === '/api/devices/revoke-others' && request.method === 'POST') {
+      const session = await authenticate(token, env);
+      if (!session) return json({ error: 'Non authentifié' }, 401);
+      const res = await env.DB.prepare(
+        'UPDATE sessions SET revoked_at_ms = ? WHERE account_id = ? AND id != ? AND revoked_at_ms IS NULL'
+      ).bind(Date.now(), session.accountId, session.sessionId || '').run();
+      return json({ success: true, revoked: res.meta.changes });
     }
 
     return json({ error: 'Route introuvable' }, 404);
@@ -555,7 +827,7 @@ function renderWebPortal(prefillCode: string): string {
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#141414">
-  <title>StremioTV • Espace Compte & Jumelage</title>
+  <title>Loge • Espace Compte & Jumelage</title>
   <style>
     /* Design Tokens calqués sur Theme.swift et tvOS */
     :root {
@@ -599,20 +871,14 @@ function renderWebPortal(prefillCode: string): string {
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      padding: 24px 16px;
+      padding: 24px 16px 40px;
       overflow-x: hidden;
     }
 
     .container {
       width: 100%;
       max-width: 460px;
-      margin: auto;
-      animation: cardEnter 0.28s var(--tv-ease-critique) both;
-    }
-
-    @keyframes cardEnter {
-      from { opacity: 0; transform: scale(0.98) translateY(8px); }
-      to { opacity: 1; transform: scale(1) translateY(0); }
+      margin: 0 auto;
     }
 
     /* Carte principale */
@@ -696,12 +962,6 @@ function renderWebPortal(prefillCode: string): string {
       border-radius: var(--tv-radius-pill);
       background-color: var(--tv-match);
       box-shadow: 0 0 10px var(--tv-match);
-      animation: pulse 2.2s infinite ease-in-out;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.45; transform: scale(0.85); }
     }
 
     .device-title {
@@ -739,6 +999,8 @@ function renderWebPortal(prefillCode: string): string {
 
     .tv-segmented-2 { grid-template-columns: 1fr 1fr; }
     .tv-segmented-4 { grid-template-columns: repeat(4, 1fr); gap: 2px; }
+    .tv-segmented-5 { grid-template-columns: repeat(5, 1fr); gap: 2px; }
+    .device-current { font-size: 11px; font-weight: 700; color: var(--tv-match); margin-left: 6px; }
 
     .tv-segment-item {
       padding: 8px 6px;
@@ -856,21 +1118,32 @@ function renderWebPortal(prefillCode: string): string {
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.14s ease;
+      transition: background 150ms ease-out, transform 150ms ease-out;
     }
     .tv-btn-danger:hover { background: rgba(229, 9, 20, 0.28); }
-    .tv-btn-danger:active { transform: scale(0.95); }
+    .tv-btn-danger:active:not(:disabled) { transform: scale(0.96); }
 
-    /* Profils items */
+    /* Profils — alignés ProfileEditorView / ProfileAvatarView */
     .profile-card {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
       padding: 12px;
       background: rgba(0, 0, 0, 0.28);
-      border: 1px solid var(--tv-border);
+      border: 1px solid transparent;
       border-radius: var(--tv-radius-control);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px var(--tv-border);
       margin-bottom: 10px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      transition: transform 150ms ease-out, background-color 150ms ease-out, box-shadow 150ms ease-out;
+    }
+    .profile-card:active:not(:disabled) { transform: scale(0.96); }
+    @media (hover: hover) {
+      .profile-card:hover { background: rgba(255, 255, 255, 0.06); }
     }
 
     .profile-info {
@@ -878,38 +1151,176 @@ function renderWebPortal(prefillCode: string): string {
       align-items: center;
       gap: 12px;
       flex: 1;
+      min-width: 0;
     }
 
     .profile-avatar {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #0A84FF, #0056B3);
+      --avatar-c: #4085F2;
+      background: var(--avatar-c);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
-      font-size: 15px;
       color: #FFF;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
       flex-shrink: 0;
+      border: 1px solid transparent;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     }
-
-    .profile-avatar.purple { background: linear-gradient(135deg, #BF5AF2, #8E24AA); }
-    .profile-avatar.red { background: linear-gradient(135deg, #FF453A, #C62828); }
-    .profile-avatar.green { background: linear-gradient(135deg, #30D158, #2E7D32); }
-    .profile-avatar.orange { background: linear-gradient(135deg, #FF9F0A, #EF6C00); }
-    .profile-avatar.yellow { background: linear-gradient(135deg, #FFD60A, #F57F17); }
+    .profile-avatar svg {
+      width: 42%;
+      height: 42%;
+      display: block;
+    }
+    .profile-avatar-lg {
+      width: 72px;
+      height: 72px;
+    }
 
     .profile-name-text {
       font-size: 14px;
       font-weight: 600;
       color: var(--tv-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .profile-subtext {
       font-size: 11px;
       color: var(--tv-text-tertiary);
+    }
+
+    .profile-edit-hint {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--tv-text-tertiary);
+      flex-shrink: 0;
+    }
+
+    .profile-editor {
+      margin-top: 12px;
+      padding: 14px;
+      background: var(--tv-surface-subtle);
+      border: 1px solid var(--tv-border);
+      border-radius: calc(var(--tv-radius-control) + 14px);
+      transition: opacity 200ms var(--tv-ease-critique);
+    }
+    .profile-editor[hidden] { display: none; }
+
+    .profile-editor-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .profile-editor-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .profile-section-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--tv-text-secondary);
+      margin: 10px 0 8px;
+      text-transform: none;
+    }
+
+    .swatch-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid transparent;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.10);
+      box-shadow: none;
+      appearance: none;
+      -webkit-appearance: none;
+      transition: transform 150ms ease-out, background-color 150ms ease-out, box-shadow 150ms ease-out, color 150ms ease-out;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .swatch:active:not(:disabled) { transform: scale(0.96); }
+    .swatch[aria-checked="true"] {
+      box-shadow: 0 0 0 2px #fff;
+      border-color: transparent;
+    }
+    .swatch-color {
+      background-color: var(--avatar-c);
+      background-image: none;
+    }
+    .swatch-color[aria-checked="true"]::after {
+      content: "";
+      width: 10px;
+      height: 6px;
+      border-left: 2px solid #fff;
+      border-bottom: 2px solid #fff;
+      transform: rotate(-45deg) translateY(-1px);
+    }
+    .swatch-symbol[aria-checked="true"] {
+      background: #fff;
+      color: #111;
+      box-shadow: none;
+    }
+    .swatch-symbol svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+    .profile-editor-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .profile-editor-actions .tv-pill-primary,
+    .profile-editor-actions .tv-btn-secondary,
+    .profile-editor-actions .tv-btn-danger {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 40px;
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+    .profile-editor-actions .tv-btn-danger {
+      display: none;
+    }
+    .profile-editor-actions .tv-btn-danger.is-visible {
+      display: inline-flex;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .profile-card,
+      .swatch,
+      .profile-editor,
+      .tv-btn-danger {
+        transition: opacity 150ms ease, background-color 150ms ease !important;
+      }
+      .profile-card:active:not(:disabled),
+      .swatch:active:not(:disabled),
+      .tv-btn-danger:active:not(:disabled) {
+        transform: none !important;
+      }
     }
 
     /* Addons list */
@@ -1064,7 +1475,7 @@ function renderWebPortal(prefillCode: string): string {
             <polygon points="6,3 20,12 6,21"/>
           </svg>
         </div>
-        <h1 class="brand-title">StremioTV</h1>
+        <h1 class="brand-title">Loge</h1>
         <p class="brand-subtitle" id="portal-sub">Synchronisation & Profils du Foyer</p>
       </div>
 
@@ -1111,7 +1522,7 @@ function renderWebPortal(prefillCode: string): string {
         <div class="user-bar">
           <div class="user-badge">
             <span class="user-email" id="user-email-display">compte@stremio</span>
-            <span class="user-foyer" id="user-foyer-display">Foyer StremioTV</span>
+            <span class="user-foyer" id="user-foyer-display">Foyer Loge</span>
           </div>
           <button type="button" class="tv-btn-secondary" onclick="handleLogout()" style="padding: 0 10px; height: 32px; font-size: 11.5px;">Déconnexion</button>
         </div>
@@ -1129,8 +1540,9 @@ function renderWebPortal(prefillCode: string): string {
         </div>
 
         <!-- Segmented 4 onglets -->
-        <div class="tv-segmented tv-segmented-4">
+        <div class="tv-segmented tv-segmented-5">
           <button type="button" class="tv-segment-item active" id="tab-btn-profiles" onclick="switchDashTab('profiles')">Profils</button>
+          <button type="button" class="tv-segment-item" id="tab-btn-devices" onclick="switchDashTab('devices')">Appareils</button>
           <button type="button" class="tv-segment-item" id="tab-btn-addons" onclick="switchDashTab('addons')">Add-ons</button>
           <button type="button" class="tv-segment-item" id="tab-btn-foyer" onclick="switchDashTab('foyer')">Surnom</button>
           <button type="button" class="tv-segment-item" id="tab-btn-security" onclick="switchDashTab('security')">Sécurité</button>
@@ -1139,23 +1551,40 @@ function renderWebPortal(prefillCode: string): string {
         <!-- TAB 1 : PROFILS -->
         <div id="tab-content-profiles">
           <div id="profiles-list" style="margin-bottom: 14px;"></div>
-          
-          <!-- Ajouter un profil (si < 6) -->
-          <div id="add-profile-box" style="background: var(--tv-surface-subtle); border: 1px dashed var(--tv-border); border-radius: var(--tv-radius-control); padding: 12px; margin-top: 10px;">
-            <div style="font-size: 12.5px; font-weight: 600; margin-bottom: 8px;">Ajouter un nouveau profil</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-              <input type="text" id="new-profile-name" class="tv-input" placeholder="Ex: Salon, Maman..." maxlength="24" style="height: 38px;">
-              <select id="new-profile-color" class="tv-input" style="height: 38px; width: 100px; padding: 0 8px;">
-                <option value="blue">Bleu</option>
-                <option value="purple">Violet</option>
-                <option value="red">Rouge</option>
-                <option value="green">Vert</option>
-                <option value="orange">Orange</option>
-                <option value="yellow">Jaune</option>
-              </select>
+          <button type="button" class="tv-pill-primary" id="profile-create-btn" onclick="openProfileEditor()" style="height: 40px; font-size: 13px;">+ Ajouter un profil</button>
+
+          <div id="profile-editor" class="profile-editor" hidden>
+            <div class="profile-editor-head">
+              <div id="profile-editor-preview" class="profile-avatar profile-avatar-lg" style="--avatar-c:#4085F2" aria-hidden="true"></div>
+              <div>
+                <div class="profile-editor-title" id="profile-editor-title">Ajouter un profil</div>
+                <div class="profile-subtext" id="profile-editor-subtitle">Couleur et pictogramme synchronisés avec l’Apple TV</div>
+              </div>
             </div>
-            <button type="button" class="tv-pill-primary" onclick="handleAddProfile()" style="height: 38px; font-size: 13px;">+ Créer le profil</button>
+            <div class="input-group" style="margin-bottom: 4px;">
+              <label class="input-label" for="profile-editor-name">Nom du profil</label>
+              <input type="text" id="profile-editor-name" class="tv-input" maxlength="16" placeholder="Ex: Salon" autocomplete="off" oninput="syncProfilePreview()">
+            </div>
+            <div class="profile-section-label">Couleur</div>
+            <div id="profile-color-row" class="swatch-row" role="radiogroup" aria-label="Couleur"></div>
+            <div class="profile-section-label">Pictogramme</div>
+            <div id="profile-symbol-row" class="swatch-row" role="radiogroup" aria-label="Pictogramme"></div>
+            <div class="profile-editor-actions">
+              <button type="button" class="tv-pill-primary" id="profile-save-btn" onclick="saveProfileEditor()" style="height: 40px; flex: 1;">Enregistrer</button>
+              <button type="button" class="tv-btn-secondary" onclick="closeProfileEditor()" style="height: 40px;">Annuler</button>
+              <button type="button" class="tv-btn-danger" id="profile-delete-btn" onclick="handleDeleteProfileFromEditor()">Supprimer</button>
+            </div>
           </div>
+        </div>
+
+        <!-- TAB : APPAREILS CONNECTÉS -->
+        <div id="tab-content-devices" style="display: none;">
+          <div style="font-size: 12px; color: var(--tv-text-secondary); margin-bottom: 10px; line-height: 1.45;">
+            Appareils liés au compte. Une Apple TV n’apparaît qu’après jumelage ou sync avec une version récente. La déconnecter coupe la sync, pas les données locales.
+          </div>
+          <div id="devices-list" style="margin-bottom: 14px;"></div>
+          <button type="button" class="tv-btn-secondary" id="revoke-others-btn" onclick="handleRevokeOthers()" style="width: 100%; height: 40px; margin-bottom: 8px;">Déconnecter tous les autres appareils</button>
+          <button type="button" class="tv-btn-danger" onclick="handleLogout()" style="width: 100%; height: 40px; display: inline-flex; align-items: center; justify-content: center;">Déconnexion de ce navigateur</button>
         </div>
 
         <!-- TAB 2 : ADD-ONS -->
@@ -1187,7 +1616,7 @@ function renderWebPortal(prefillCode: string): string {
         <!-- TAB 4 : SÉCURITÉ / MOT DE PASSE -->
         <div id="tab-content-security" style="display: none;">
           <div style="font-size: 12.5px; color: var(--tv-text-secondary); margin-bottom: 12px;">
-            Modifiez le mot de passe de votre compte StremioTV.
+            Modifiez le mot de passe de votre compte Loge.
           </div>
           <div class="input-group">
             <label class="input-label" for="cur-pwd">Mot de passe actuel</label>
@@ -1204,7 +1633,7 @@ function renderWebPortal(prefillCode: string): string {
 
     <!-- PIED DE PAGE -->
     <div class="footer-bar">
-      <span>StremioTV 2.0</span>
+      <span>Loge 2.0</span>
       <span class="footer-dot"></span>
       <span>Cloudflare D1</span>
       <span class="footer-dot"></span>
@@ -1218,6 +1647,67 @@ function renderWebPortal(prefillCode: string): string {
   <script>
     let authMode = 'login';
     const pairCode = "${prefillCode}";
+    let cachedProfiles = [];
+    let editingProfileId = null;
+    let draftAvatar = { color: 'blue', symbol: 'face.smiling' };
+
+    // Source of truth: Sources/Models/Profile.swift + ProfileAvatarView.swift
+    const AVATAR_COLORS = [
+      { id: 'red', hex: '#E63338' },
+      { id: 'orange', hex: '#FA8C26' },
+      { id: 'yellow', hex: '#F7C733' },
+      { id: 'green', hex: '#40C273' },
+      { id: 'teal', hex: '#2EB2BD' },
+      { id: 'blue', hex: '#4085F2' },
+      { id: 'purple', hex: '#9461EB' },
+      { id: 'pink', hex: '#F2619E' }
+    ];
+    const AVATAR_SYMBOLS = [
+      'face.smiling', 'star.fill', 'gamecontroller.fill', 'popcorn.fill',
+      'moon.stars.fill', 'bolt.fill', 'heart.fill', 'pawprint.fill',
+      'flame.fill', 'leaf.fill'
+    ];
+
+    function avatarColorHex(id) {
+      const hit = AVATAR_COLORS.find(function(c) { return c.id === id; });
+      return hit ? hit.hex : '#4085F2';
+    }
+
+    function avatarSymbolSvg(symbol) {
+      const paths = {
+        'face.smiling': '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.15" fill="currentColor"/><circle cx="15" cy="10" r="1.15" fill="currentColor"/><path d="M8.2 14.2c1.3 1.7 2.9 2.4 3.8 2.4s2.5-.7 3.8-2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+        'star.fill': '<path fill="currentColor" d="M12 3.1l2.35 4.76 5.25.76-3.8 3.7.9 5.24L12 15.1l-4.7 2.46.9-5.24-3.8-3.7 5.25-.76z"/>',
+        'gamecontroller.fill': '<path fill="currentColor" d="M8.2 8.2h7.6c2.4 0 4.2 2.1 3.8 4.5l-.5 2.8c-.3 1.7-1.8 2.9-3.5 2.9h-7.2c-1.7 0-3.2-1.2-3.5-2.9l-.5-2.8c-.4-2.4 1.4-4.5 3.8-4.5zm1.3 2.2v1.4H8.1v1.6h1.4V15h1.6v-1.6h1.4v-1.6h-1.4v-1.4H9.5zm6.2 1.1a1.05 1.05 0 110 2.1 1.05 1.05 0 010-2.1zm1.9 1.9a1.05 1.05 0 110 2.1 1.05 1.05 0 010-2.1z"/>',
+        'popcorn.fill': '<path fill="currentColor" d="M7.2 10.2h9.6l-.7 8.1c-.1.9-.9 1.6-1.8 1.6H9.7c-.9 0-1.7-.7-1.8-1.6l-.7-8.1zm1.6-5.2.6 1.8 1.2-.9.5 1.6 1.1-.7.6 1.5 1.1-.5.4 1.4h-7l.4-1.4 1.1.5.6-1.5 1.1.7.5-1.6 1.2.9z"/>',
+        'moon.stars.fill': '<path fill="currentColor" d="M14.8 3.5a7.5 7.5 0 1 0 5.7 10.2 6.1 6.1 0 0 1-5.7-10.2zM18.1 5l.55 1.2 1.2.55-1.2.55L18.1 8.5l-.55-1.2-1.2-.55 1.2-.55z"/>',
+        'bolt.fill': '<path fill="currentColor" d="M13.2 2.5L6.8 13.1h4.1l-.9 8.4 7.2-11.4h-4.3z"/>',
+        'heart.fill': '<path fill="currentColor" d="M12 20.2s-7.2-4.4-9.1-8.3C1.4 9 2.6 6.2 5.3 5.5c1.7-.4 3.3.3 4.2 1.6.9-1.3 2.5-2 4.2-1.6 2.7.7 3.9 3.5 2.4 6.4-1.9 3.9-9.1 8.3-9.1 8.3z"/>',
+        'pawprint.fill': '<path fill="currentColor" d="M8.1 9.1a1.7 1.7 0 112.3-2.5 1.7 1.7 0 01-2.3 2.5zm5.5 0a1.7 1.7 0 112.3-2.5 1.7 1.7 0 01-2.3 2.5zM6.2 12.4a1.55 1.55 0 112.1-2.2 1.55 1.55 0 01-2.1 2.2zm9.5 0a1.55 1.55 0 112.1-2.2 1.55 1.55 0 01-2.1 2.2zM12 13.2c-2.4 0-4.2 1.9-3.7 3.6.4 1.3 1.9 2.2 3.7 2.2s3.3-.9 3.7-2.2c.5-1.7-1.3-3.6-3.7-3.6z"/>',
+        'flame.fill': '<path fill="currentColor" d="M12.2 2.8c.2 2.1 1.4 3.3 2.6 4.5 1.4 1.4 2.7 2.8 2.7 5.1 0 3.2-2.4 5.8-5.5 5.8S6.5 15.6 6.5 12.4c0-1.7.7-3.1 1.7-4.3.5 1.6 1.5 2.4 2.5 2.4-.2-1.8.4-3.5 1.5-5.7z"/>',
+        'leaf.fill': '<path fill="currentColor" d="M19.2 4.8c-4.8-.4-9.3 1.2-11.6 5.1-1.5 2.5-1.6 5.4-.4 7.7l-2 2.1 1.3 1.2 2-2.1c2.3 1 5.1.7 7.4-.9 3.7-2.6 5.1-7.3 3.3-13.1z"/>'
+      };
+      return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (paths[symbol] || paths['face.smiling']) + '</svg>';
+    }
+
+    function parseAvatar(p) {
+      let avatar = { color: 'blue', symbol: 'face.smiling' };
+      try {
+        if (typeof p.avatar_json === 'string') avatar = JSON.parse(p.avatar_json);
+        else if (p.avatar) avatar = p.avatar;
+      } catch (_) {}
+      if (!AVATAR_COLORS.some(function(c) { return c.id === avatar.color; })) avatar.color = 'blue';
+      if (AVATAR_SYMBOLS.indexOf(avatar.symbol) < 0) avatar.symbol = 'face.smiling';
+      return avatar;
+    }
+
+    function suggestedAvatar(profiles) {
+      const usedColors = new Set(profiles.map(function(p) { return parseAvatar(p).color; }));
+      const usedSymbols = new Set(profiles.map(function(p) { return parseAvatar(p).symbol; }));
+      return {
+        color: (AVATAR_COLORS.find(function(c) { return !usedColors.has(c.id); }) || AVATAR_COLORS[profiles.length % AVATAR_COLORS.length]).id,
+        symbol: AVATAR_SYMBOLS.find(function(s) { return !usedSymbols.has(s); }) || AVATAR_SYMBOLS[profiles.length % AVATAR_SYMBOLS.length]
+      };
+    }
     let accountData = null;
 
     // Toast
@@ -1232,11 +1722,37 @@ function renderWebPortal(prefillCode: string): string {
       }, 3000);
     }
 
+    // Persist across visits (not sessionStorage): same origin as the QR keeps the foyer signed in.
+    function readStoredAuth() {
+      let token = localStorage.getItem('loge_token');
+      let email = localStorage.getItem('loge_email');
+      if (!token) {
+        token = localStorage.getItem('stremiotv_token');
+        if (token) {
+          localStorage.setItem('loge_token', token);
+          localStorage.removeItem('stremiotv_token');
+          email = localStorage.getItem('stremiotv_email') || email;
+          if (email) {
+            localStorage.setItem('loge_email', email);
+            localStorage.removeItem('stremiotv_email');
+          }
+        }
+      }
+      return { token: token || null, email: email || null };
+    }
+
+    function hasPairCode() {
+      return !!(pairCode && pairCode !== 'STREM-XXXX');
+    }
+
     // Gestion de l'état de démarrage
     document.addEventListener('DOMContentLoaded', async () => {
-      const token = localStorage.getItem('stremiotv_token');
-      if (token) {
-        await loadDashboard();
+      const { token } = readStoredAuth();
+      if (!token) return;
+      await loadDashboard();
+      // Already signed in on the phone: scanning the TV QR confirms without re-typing credentials.
+      if (localStorage.getItem('loge_token') && hasPairCode()) {
+        await handleConfirmPairing();
       }
     });
 
@@ -1265,15 +1781,15 @@ function renderWebPortal(prefillCode: string): string {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ email, password, deviceName: 'Navigateur web', deviceModel: browserLabel() })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur d\\'authentification');
 
-        localStorage.setItem('stremiotv_token', data.token);
-        localStorage.setItem('stremiotv_email', email);
+        localStorage.setItem('loge_token', data.token);
+        localStorage.setItem('loge_email', email);
 
-        if (pairCode && pairCode !== 'STREM-XXXX') {
+        if (hasPairCode()) {
           try {
             await fetch('/api/device/confirm', {
               method: 'POST',
@@ -1297,12 +1813,16 @@ function renderWebPortal(prefillCode: string): string {
     }
 
     async function loadDashboard() {
-      const token = localStorage.getItem('stremiotv_token');
+      const token = readStoredAuth().token;
       if (!token) return;
 
       try {
         const res = await fetch('/api/account', {
-          headers: { 'Authorization': 'Bearer ' + token }
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'X-Device-Name': 'Navigateur web',
+            'X-Device-Model': browserLabel()
+          }
         });
         if (res.status === 401) {
           handleLogout();
@@ -1315,50 +1835,152 @@ function renderWebPortal(prefillCode: string): string {
         document.getElementById('dash-panel').style.display = 'block';
         document.getElementById('portal-sub').innerText = 'Espace Gestion du Foyer';
 
-        document.getElementById('user-email-display').innerText = accountData.email || localStorage.getItem('stremiotv_email') || 'Compte actif';
-        document.getElementById('user-foyer-display').innerText = accountData.nickname ? 'Foyer : ' + accountData.nickname : 'Foyer StremioTV';
+        if (accountData.token) localStorage.setItem('loge_token', accountData.token);
+        document.getElementById('user-email-display').innerText = accountData.email || localStorage.getItem('loge_email') || 'Compte actif';
+        document.getElementById('user-foyer-display').innerText = accountData.nickname ? 'Foyer : ' + accountData.nickname : 'Foyer Loge';
         document.getElementById('foyer-nickname-input').value = accountData.nickname || '';
 
         renderProfiles(accountData.profiles || []);
         renderAddons(accountData.addons || []);
+        await loadDevices();
       } catch (e) {
         showToast('Erreur lors du chargement des données', 'error');
       }
     }
 
     function renderProfiles(profiles) {
+      cachedProfiles = profiles || [];
       const container = document.getElementById('profiles-list');
-      if (!profiles.length) {
+      const createBtn = document.getElementById('profile-create-btn');
+      createBtn.style.display = cachedProfiles.length >= 6 || !document.getElementById('profile-editor').hidden ? 'none' : 'flex';
+
+      if (!cachedProfiles.length) {
         container.innerHTML = '<div style="font-size: 13px; color: var(--tv-text-tertiary); text-align: center; padding: 12px;">Aucun profil trouvé.</div>';
         return;
       }
 
-      container.innerHTML = profiles.map(function(p) {
-        let avatarObj = { color: 'blue', symbol: 'face.smiling' };
-        try {
-          if (typeof p.avatar_json === 'string') avatarObj = JSON.parse(p.avatar_json);
-        } catch (_) {}
-
-        const colorClass = avatarObj.color || 'blue';
-        const initial = (p.name || 'P').charAt(0).toUpperCase();
-
-        return '<div class="profile-card">' +
+      container.innerHTML = cachedProfiles.map(function(p) {
+        const avatar = parseAvatar(p);
+        return '<button type="button" class="profile-card" onclick="openProfileEditor(\\'' + p.id + '\\')" aria-label="Modifier ' + escapeHtml(p.name) + '">' +
           '<div class="profile-info">' +
-            '<div class="profile-avatar ' + colorClass + '">' + initial + '</div>' +
-            '<div style="flex: 1; overflow: hidden;">' +
-              '<input type="text" class="tv-input" value="' + escapeHtml(p.name) + '" ' +
-                'id="prof-name-' + p.id + '" ' +
-                'style="height: 34px; font-size: 13.5px; font-weight: 600; padding: 0 8px;" ' +
-                'onchange="handleRenameProfile(\\'' + p.id + '\\')">' +
+            '<div class="profile-avatar" style="--avatar-c:' + avatarColorHex(avatar.color) + '">' + avatarSymbolSvg(avatar.symbol) + '</div>' +
+            '<div style="min-width:0">' +
+              '<div class="profile-name-text">' + escapeHtml(p.name) + '</div>' +
+              '<div class="profile-subtext">Modifier couleur et pictogramme</div>' +
             '</div>' +
           '</div>' +
-          '<div style="margin-left: 8px;">' +
-            '<button type="button" class="tv-btn-danger" onclick="handleDeleteProfile(\\'' + p.id + '\\')" title="Supprimer">Supprimer</button>' +
-          '</div>' +
-        '</div>';
+          '<span class="profile-edit-hint">Modifier</span>' +
+        '</button>';
       }).join('');
+    }
 
-      document.getElementById('add-profile-box').style.display = profiles.length >= 6 ? 'none' : 'block';
+    function syncProfilePreview() {
+      const preview = document.getElementById('profile-editor-preview');
+      const nameInput = document.getElementById('profile-editor-name');
+      preview.style.setProperty('--avatar-c', avatarColorHex(draftAvatar.color));
+      preview.innerHTML = avatarSymbolSvg(draftAvatar.symbol);
+      const liveName = (nameInput.value || '').trim();
+      document.getElementById('profile-editor-subtitle').textContent = liveName || (editingProfileId ? 'Modifier le profil' : 'Nouveau profil');
+    }
+
+    function renderAvatarPickers() {
+      const colorRow = document.getElementById('profile-color-row');
+      const symbolRow = document.getElementById('profile-symbol-row');
+      colorRow.innerHTML = AVATAR_COLORS.map(function(c) {
+        return '<button type="button" class="swatch swatch-color" role="radio" aria-checked="' + (draftAvatar.color === c.id) + '" aria-label="' + c.id + '" style="--avatar-c:' + c.hex + '" onclick="setDraftColor(\\'' + c.id + '\\')"></button>';
+      }).join('');
+      symbolRow.innerHTML = AVATAR_SYMBOLS.map(function(s) {
+        return '<button type="button" class="swatch swatch-symbol" role="radio" aria-checked="' + (draftAvatar.symbol === s) + '" aria-label="' + s + '" onclick="setDraftSymbol(\\'' + s + '\\')">' + avatarSymbolSvg(s) + '</button>';
+      }).join('');
+    }
+
+    function setDraftColor(color) {
+      draftAvatar.color = color;
+      renderAvatarPickers();
+      syncProfilePreview();
+    }
+
+    function setDraftSymbol(symbol) {
+      draftAvatar.symbol = symbol;
+      renderAvatarPickers();
+      syncProfilePreview();
+    }
+
+    function openProfileEditor(id) {
+      editingProfileId = id || null;
+      const editor = document.getElementById('profile-editor');
+      const deleteBtn = document.getElementById('profile-delete-btn');
+      const nameInput = document.getElementById('profile-editor-name');
+      document.getElementById('profile-create-btn').style.display = 'none';
+
+      if (editingProfileId) {
+        const profile = cachedProfiles.find(function(p) { return p.id === editingProfileId; });
+        if (!profile) return;
+        const avatar = parseAvatar(profile);
+        draftAvatar = { color: avatar.color, symbol: avatar.symbol };
+        nameInput.value = profile.name || '';
+        document.getElementById('profile-editor-title').textContent = 'Modifier le profil';
+        deleteBtn.classList.toggle('is-visible', cachedProfiles.length > 1);
+      } else {
+        draftAvatar = suggestedAvatar(cachedProfiles);
+        nameInput.value = 'Profil ' + (cachedProfiles.length + 1);
+        document.getElementById('profile-editor-title').textContent = 'Ajouter un profil';
+        deleteBtn.classList.remove('is-visible');
+      }
+
+      editor.hidden = false;
+      renderAvatarPickers();
+      syncProfilePreview();
+      nameInput.focus();
+      nameInput.select();
+    }
+
+    function closeProfileEditor() {
+      editingProfileId = null;
+      document.getElementById('profile-editor').hidden = true;
+      document.getElementById('profile-create-btn').style.display = cachedProfiles.length >= 6 ? 'none' : 'flex';
+    }
+
+    async function saveProfileEditor() {
+      const token = localStorage.getItem('loge_token');
+      const name = document.getElementById('profile-editor-name').value.trim();
+      if (!name) {
+        showToast('Donnez un nom au profil.', 'error');
+        return;
+      }
+      if (name.length > 16) {
+        showToast('Le nom est trop long (16 caractères maximum).', 'error');
+        return;
+      }
+
+      const body = {
+        name: name,
+        avatar: { color: draftAvatar.color, symbol: draftAvatar.symbol }
+      };
+      if (editingProfileId) body.id = editingProfileId;
+
+      try {
+        const res = await fetch('/api/account/profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showToast(editingProfileId ? 'Profil mis à jour.' : 'Profil « ' + name + ' » ajouté !', 'success');
+        closeProfileEditor();
+        await loadDashboard();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function handleDeleteProfileFromEditor() {
+      if (!editingProfileId) return;
+      await handleDeleteProfile(editingProfileId);
     }
 
     function renderAddons(addons) {
@@ -1381,18 +2003,116 @@ function renderWebPortal(prefillCode: string): string {
       }).join('');
     }
 
+    function browserLabel() {
+      const ua = navigator.userAgent;
+      if (/iPhone/.test(ua)) return 'iPhone';
+      if (/iPad/.test(ua)) return 'iPad';
+      if (/Android/.test(ua)) return 'Android';
+      if (/Macintosh/.test(ua)) return 'Mac';
+      if (/Windows/.test(ua)) return 'PC Windows';
+      return '';
+    }
+
+    function formatLastSeen(ms) {
+      if (!ms) return '';
+      const minutes = Math.round((Date.now() - ms) / 60000);
+      if (minutes < 10) return 'Actif récemment';
+      if (minutes < 60) return 'Vu il y a ' + minutes + ' min';
+      const hours = Math.round(minutes / 60);
+      if (hours < 24) return 'Vu il y a ' + hours + ' h';
+      return 'Vu le ' + new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    }
+
+    async function loadDevices() {
+      const token = localStorage.getItem('loge_token');
+      try {
+        const res = await fetch('/api/devices', {
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'X-Device-Name': 'Navigateur web',
+            'X-Device-Model': browserLabel()
+          }
+        });
+        if (res.status === 401) { handleLogout(); return; }
+        const data = await res.json();
+        if (data.token) localStorage.setItem('loge_token', data.token);
+        renderDevices(data.devices || []);
+      } catch (_) {
+        document.getElementById('devices-list').innerHTML = '';
+      }
+    }
+
+    function renderDevices(devices) {
+      const container = document.getElementById('devices-list');
+      const others = devices.filter(function(d) { return !d.isCurrent; });
+      document.getElementById('revoke-others-btn').style.display = others.length ? 'flex' : 'none';
+      if (!devices.length) {
+        container.innerHTML = '<div style="font-size: 13px; color: var(--tv-text-tertiary); text-align: center; padding: 12px;">Aucun appareil connecté. Les appareils connectés avant cette version n\\'apparaissent pas ici.</div>';
+        return;
+      }
+      container.innerHTML = devices.map(function(d) {
+        const subtitle = [d.model, formatLastSeen(d.lastSeenAtMs)].filter(Boolean).join(' · ');
+        const action = d.isCurrent
+          ? '<span class="device-current">Cet appareil</span>'
+          : '<button type="button" class="tv-btn-danger" data-id="' + escapeHtml(d.id) + '" onclick="handleRevokeDevice(this.dataset.id)">Déconnecter</button>';
+        return '<div class="addon-card">' +
+          '<div class="addon-meta">' +
+            '<div class="addon-name">' + escapeHtml(d.name) + '</div>' +
+            '<div class="addon-host">' + escapeHtml(subtitle) + '</div>' +
+          '</div>' + action +
+        '</div>';
+      }).join('');
+    }
+
+    async function handleRevokeDevice(id) {
+      const token = localStorage.getItem('loge_token');
+      try {
+        const res = await fetch('/api/devices/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ id: id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showToast('Appareil déconnecté.', 'success');
+        await loadDevices();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function handleRevokeOthers() {
+      if (!confirm('Déconnecter tous les autres appareils ? Ils devront se reconnecter pour se synchroniser.')) return;
+      const token = localStorage.getItem('loge_token');
+      try {
+        const res = await fetch('/api/devices/revoke-others', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showToast('Autres appareils déconnectés.', 'success');
+        await loadDevices();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
     function switchDashTab(tab) {
-      ['profiles', 'addons', 'foyer', 'security'].forEach(t => {
+      ['profiles', 'devices', 'addons', 'foyer', 'security'].forEach(t => {
         document.getElementById('tab-btn-' + t).classList.toggle('active', t === tab);
         document.getElementById('tab-content-' + t).style.display = t === tab ? 'block' : 'none';
       });
     }
 
     async function handleConfirmPairing() {
-      const token = localStorage.getItem('stremiotv_token');
+      const token = readStoredAuth().token;
+      if (!token || !hasPairCode()) return;
       const btn = document.getElementById('dash-pair-btn');
-      btn.disabled = true;
-      btn.innerText = 'Liaison...';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Liaison...';
+      }
 
       try {
         const res = await fetch('/api/device/confirm', {
@@ -1407,16 +2127,19 @@ function renderWebPortal(prefillCode: string): string {
         if (!res.ok) throw new Error(data.error || 'Erreur lors du jumelage');
 
         showToast('Apple TV jumelée avec succès !', 'success');
-        document.getElementById('dash-pair-banner').style.display = 'none';
+        const banner = document.getElementById('dash-pair-banner');
+        if (banner) banner.style.display = 'none';
       } catch (err) {
         showToast(err.message, 'error');
-        btn.disabled = false;
-        btn.innerText = 'Associer';
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = 'Associer';
+        }
       }
     }
 
     async function handleSaveNickname() {
-      const token = localStorage.getItem('stremiotv_token');
+      const token = localStorage.getItem('loge_token');
       const nickname = document.getElementById('foyer-nickname-input').value.trim();
 
       try {
@@ -1432,14 +2155,14 @@ function renderWebPortal(prefillCode: string): string {
         if (!res.ok) throw new Error(data.error || 'Erreur');
 
         showToast('Surnom du foyer enregistré !', 'success');
-        document.getElementById('user-foyer-display').innerText = nickname ? 'Foyer : ' + nickname : 'Foyer StremioTV';
+        document.getElementById('user-foyer-display').innerText = nickname ? 'Foyer : ' + nickname : 'Foyer Loge';
       } catch (err) {
         showToast(err.message, 'error');
       }
     }
 
     async function handleChangePassword() {
-      const token = localStorage.getItem('stremiotv_token');
+      const token = localStorage.getItem('loge_token');
       const currentPassword = document.getElementById('cur-pwd').value;
       const newPassword = document.getElementById('new-pwd').value;
 
@@ -1468,67 +2191,11 @@ function renderWebPortal(prefillCode: string): string {
       }
     }
 
-    async function handleRenameProfile(id) {
-      const token = localStorage.getItem('stremiotv_token');
-      const input = document.getElementById('prof-name-' + id);
-      const name = input ? input.value.trim() : '';
-      if (!name) return;
-
-      try {
-        const res = await fetch('/api/account/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({ id, name })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-        showToast('Profil renommé en « ' + name + ' »', 'success');
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-
-    async function handleAddProfile() {
-      const token = localStorage.getItem('stremiotv_token');
-      const nameInput = document.getElementById('new-profile-name');
-      const colorSelect = document.getElementById('new-profile-color');
-      const name = nameInput.value.trim();
-      const color = colorSelect.value;
-
-      if (!name) {
-        showToast('Veuillez saisir un nom de profil', 'error');
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/account/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({
-            name,
-            avatar: { color, symbol: 'person.crop.circle' }
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        showToast('Profil « ' + name + ' » ajouté !', 'success');
-        nameInput.value = '';
-        await loadDashboard();
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-
     async function handleDeleteProfile(id) {
-      if (!confirm('Voulez-vous vraiment supprimer ce profil ?')) return;
-      const token = localStorage.getItem('stremiotv_token');
+      const profile = cachedProfiles.find(function(p) { return p.id === id; });
+      const label = profile ? '« ' + profile.name + ' »' : 'ce profil';
+      if (!confirm('Supprimer le profil ' + label + ' ? Sa liste et sa progression de lecture seront perdues.')) return;
+      const token = localStorage.getItem('loge_token');
 
       try {
         const res = await fetch('/api/account/profile', {
@@ -1543,6 +2210,7 @@ function renderWebPortal(prefillCode: string): string {
         if (!res.ok) throw new Error(data.error || 'Erreur');
 
         showToast('Profil supprimé.', 'success');
+        closeProfileEditor();
         await loadDashboard();
       } catch (err) {
         showToast(err.message, 'error');
@@ -1550,7 +2218,7 @@ function renderWebPortal(prefillCode: string): string {
     }
 
     async function handleAddAddon() {
-      const token = localStorage.getItem('stremiotv_token');
+      const token = localStorage.getItem('loge_token');
       const input = document.getElementById('new-addon-url');
       const manifestUrl = input.value.trim();
 
@@ -1582,7 +2250,7 @@ function renderWebPortal(prefillCode: string): string {
     async function handleDeleteAddon(encodedUrl) {
       const manifestUrl = decodeURIComponent(encodedUrl);
       if (!confirm('Retirer cette extension ?')) return;
-      const token = localStorage.getItem('stremiotv_token');
+      const token = localStorage.getItem('loge_token');
 
       try {
         const res = await fetch('/api/account/addons', {
@@ -1604,6 +2272,11 @@ function renderWebPortal(prefillCode: string): string {
     }
 
     function handleLogout() {
+      const token = readStoredAuth().token;
+      // Best effort: the session is revoked server-side so it leaves the device list.
+      if (token) fetch('/api/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } }).catch(function() {});
+      localStorage.removeItem('loge_token');
+      localStorage.removeItem('loge_email');
       localStorage.removeItem('stremiotv_token');
       localStorage.removeItem('stremiotv_email');
       document.getElementById('dash-panel').style.display = 'none';
@@ -1620,3 +2293,44 @@ function renderWebPortal(prefillCode: string): string {
 </body>
 </html>`;
 }
+
+const privacyPolicyText = `Politique de confidentialité — Loge
+
+Dernière mise à jour : 11 novembre 2026
+
+Loge est une application Apple TV qui vous permet de parcourir des catalogues et de lire des flux que vous configurez vous-même (addons / sources). Loge n’héberge aucun contenu vidéo.
+
+Données collectées si vous créez un compte
+• Adresse e-mail et mot de passe (hashé) pour l’authentification
+• Nom et modèle de l’appareil pour la liste des sessions
+• Profils, « Ma liste » et progression de lecture synchronisés entre vos appareils
+
+Finalité
+• Fournir le compte foyer, l’appairage et la synchronisation multi-appareils
+• Permettre la révocation d’une session (déconnexion d’un appareil)
+
+Conservation et sécurité
+• Les données sont stockées sur Cloudflare (Worker + base D1)
+• Les jetons d’accès sont liés à une session révocable
+• Pas de publicité, pas de tracking publicitaire, pas de revente de données
+
+Vos droits
+• Vous pouvez supprimer des profils, vous déconnecter, ou demander la suppression du compte via le support
+
+Contact
+• support : https://loge-api.stremiotv-home.workers.dev/support`;
+
+const privacyPolicyHTML = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confidentialité — Loge</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.5"><pre style="white-space:pre-wrap;font-family:inherit">${privacyPolicyText.replace(/</g, '&lt;')}</pre></body></html>`;
+
+const supportHTML = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Support — Loge</title>
+<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#111;background:#fafafa}a{color:#c00}</style></head>
+<body>
+<h1>Support Loge</h1>
+<p>Loge est un lecteur Apple TV : vous apportez vos propres addons et sources. L’app ne fournit aucun flux.</p>
+<ul>
+<li>Compte &amp; appareils : ouvrez <a href="/">l’espace compte</a> pour jumeler une Apple TV ou gérer les sessions.</li>
+<li>Confidentialité : <a href="/privacy">politique de confidentialité</a>.</li>
+<li>Contact : écrivez à <a href="mailto:a.briolon92@gmail.com">a.briolon92@gmail.com</a>.</li>
+</ul>
+</body></html>`;

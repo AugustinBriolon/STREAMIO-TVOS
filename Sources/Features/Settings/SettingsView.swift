@@ -177,6 +177,7 @@ struct SettingsView: View {
                     .buttonStyle(PillButtonStyle(kind: .secondary))
                 }
                 .padding(.vertical, 8)
+                devicesList
             } else {
                 HStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -198,6 +199,47 @@ struct SettingsView: View {
                 .padding(.vertical, 8)
             }
         }
+    }
+
+    /// Devices signed in to the account. Read-only here: they are signed out from the online account page.
+    private var devicesList: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            Text("Appareils connectés")
+                .font(Theme.Typography.cardTitle)
+                .foregroundStyle(Theme.Palette.textPrimary)
+            if auth.devices.isEmpty {
+                Text("Les appareils connectés avant cette version n'apparaissent qu'après une nouvelle connexion.")
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(Theme.Palette.textSecondary)
+            }
+            ForEach(auth.devices) { device in
+                HStack(spacing: Theme.Spacing.s) {
+                    Image(systemName: "appletv.fill")
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                        Text(device.name)
+                            .font(Theme.Typography.body)
+                            .foregroundStyle(Theme.Palette.textPrimary)
+                        Text([device.model, device.lastSeen.map { "Vu \($0.formatted(.relative(presentation: .named)))" }]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Palette.textSecondary)
+                    }
+                    Spacer()
+                    if device.isCurrent {
+                        Text("Cet appareil")
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Palette.info)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Text("Pour déconnecter un appareil, ouvrez votre espace en ligne : \(auth.apiBaseURL)")
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Palette.textTertiary)
+        }
+        .padding(.top, Theme.Spacing.m)
+        .task { await auth.refreshDevices() }
     }
 
     // MARK: - Sélecteurs de Langues (Menu natif tvOS avec options cachées)
@@ -361,6 +403,10 @@ struct SettingsView: View {
 
     private var addonsContent: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Text("Loge ne fournit aucun flux. Ajoutez uniquement des addons et sources auxquels vous avez légalement accès.")
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Palette.textSecondary)
+
             if addons.urls.isEmpty {
                 Text("Aucun addon configuré. Utilisez le compagnon web ou saisissez une URL ci-dessous.")
                     .font(Theme.Typography.caption)
@@ -429,10 +475,10 @@ struct SettingsView: View {
 
     private var aboutContent: some View {
         VStack(spacing: 8) {
-            aboutRow(label: "Version", value: "StremioTV 2.0 (Build 1)")
+            aboutRow(label: "Version", value: "Loge 2.0")
             aboutRow(label: "Moteur vidéo", value: "libVLC (TVVLCKit)")
             aboutRow(label: "Métadonnées", value: "TMDB API v3 & Cinemeta")
-            aboutRow(label: "Stockage partagé", value: "App Group com.h6245.vortxtv")
+            aboutRow(label: "Stockage partagé", value: "App Group Loge")
         }
     }
 

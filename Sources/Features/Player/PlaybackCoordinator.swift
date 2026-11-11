@@ -43,6 +43,8 @@ final class PlaybackCoordinator {
         guard !addons.urls.isEmpty else {
             return fail("Aucun addon n'est configuré. Ajoutez-en un dans Réglages.")
         }
+        // Drop any prior session first so a new PlayerView cannot overlap a live VLC instance.
+        if session != nil { close() }
         resolvingItem = item
         defer { resolvingItem = nil }
 

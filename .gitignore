@@ -25,3 +25,4 @@ Vendor/
 # Node / Backend
 node_modules/
 .wrangler/
+.asc/

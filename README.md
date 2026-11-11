@@ -1,4 +1,4 @@
-# StremioTV
+# Loge
 
 Native Apple TV (tvOS) client for [Stremio](https://www.stremio.com/) addons, written in SwiftUI with a Netflix-like 10-foot interface: browse Cinemeta catalogs, keep a personal list, resume where you stopped and play the best stream from your own addons in one click.
 
@@ -41,7 +41,7 @@ Sources/
 └── Features/       # Profiles, Root (icon rail), Home, Detail, Streams, Player, Search, MyList, Settings
 TopShelf/           # Top Shelf extension (ADR 0015)
 Config/             # Generated entitlements and Info.plists (from project.yml)
-Tests/StremioTVTests/  # Swift Testing unit tests
+Tests/LogeTests/  # Swift Testing unit tests
 ```
 
 - Views render only; loading and rules live in `@Observable @MainActor` view models and services.
@@ -79,11 +79,11 @@ xcrun devicectl list devices
 ```
 
 ```bash
-xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPLE_TV_UDID>" -derivedDataPath build -allowProvisioningUpdates build
+xcodebuild -project Loge.xcodeproj -scheme Loge -destination "id=<APPLE_TV_UDID>" -derivedDataPath build -allowProvisioningUpdates build
 ```
 
 ```bash
-xcrun devicectl device install app --device <APPLE_TV_UDID> build/Build/Products/Debug-appletvos/StremioTV.app
+xcrun devicectl device install app --device <APPLE_TV_UDID> build/Build/Products/Debug-appletvos/Loge.app
 ```
 
 ```bash
@@ -99,7 +99,7 @@ Open **Réglages** on the TV, then on a phone or computer on the same Wi-Fi open
 Unit tests (Swift Testing) cover stream parsing and ranking (including HEVC on Apple TV HD), default audio/subtitle selection on real track names, seek preview/acceleration and clickpad ring rotation math, the preview grid plan, the HTTP parser and config portal security, Keychain migration, library/progress rules, episode navigation, playback resolution and view models.
 
 ```bash
-xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "id=<APPLE_TV_UDID>" -allowProvisioningUpdates test
+xcodebuild -project Loge.xcodeproj -scheme Loge -destination "id=<APPLE_TV_UDID>" -allowProvisioningUpdates test
 ```
 
 Use `-destination "platform=tvOS Simulator,name=Apple TV 4K (3rd generation)"` instead when a tvOS simulator runtime is installed.
@@ -112,14 +112,14 @@ There are no automated UI tests (see [ADR 0002](docs/adr/0002-unit-testing-with-
 |---|---|
 | Regenerate the Xcode project after adding/removing files | `xcodegen generate` |
 | Regenerate the icon and Top Shelf images (ADR 0013) | `swift scripts/generate-brand-assets.swift` |
-| Compile app and tests without a device | `xcodebuild -project StremioTV.xcodeproj -scheme StremioTV -destination "generic/platform=tvOS Simulator" build-for-testing` |
+| Compile app and tests without a device | `xcodebuild -project Loge.xcodeproj -scheme Loge -destination "generic/platform=tvOS Simulator" build-for-testing` |
 
 Conventions (also in [.claude/CLAUDE.md](.claude/CLAUDE.md)):
 
 - UI strings are French; code, comments and docs are English.
 - Use `Theme` tokens, never hardcoded colors or sizes in features.
 - New logic goes into a service or view model with a unit test; views stay pure.
-- `project.yml` is the source of truth; do not edit `StremioTV.xcodeproj` by hand.
+- `project.yml` is the source of truth; do not edit `Loge.xcodeproj` by hand.
 
 ## Security model
 

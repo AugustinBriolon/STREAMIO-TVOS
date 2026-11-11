@@ -1,9 +1,8 @@
-name = "stremiotv-api"
+name = "loge-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-[vars]
-JWT_SECRET = "stremiotv-jwt-secret-replace-in-production"
+# JWT_SECRET is set via `wrangler secret put JWT_SECRET` (not in vars).
 
 [[d1_databases]]
 binding = "DB"

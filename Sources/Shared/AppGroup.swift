@@ -12,6 +12,10 @@ public enum AppGroup {
 public enum StorageKey {
     public static let profiles = "profiles.v1"
     public static let activeProfile = "profiles.active.v1"
+    /// Profiles deleted on this device, with the deletion date, until the account has been told (ADR 0023).
+    public static let deletedProfiles = "profiles.deleted.v1"
+    /// True while the only profile is the one created at first launch and nobody has used it yet.
+    public static let untouchedDefaultProfile = "profiles.untouchedDefault.v1"
 
     public static func myList(_ profileID: UUID) -> String { "library.\(profileID.uuidString).myList.v1" }
     public static func progress(_ profileID: UUID) -> String { "library.\(profileID.uuidString).progress.v1" }

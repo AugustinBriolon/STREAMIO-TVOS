@@ -130,7 +130,7 @@ writeStack(brand.appendingPathComponent("App Icon - App Store.imagestack"), widt
 func drawTopShelf(_ c: CGContext, _ size: CGSize) {
     drawBackground(c, size)
     let ringRadius = size.height * 0.17
-    let wordmark = "StremioTV"
+    let wordmark = "Loge"
     let font = NSFont.systemFont(ofSize: size.height * 0.2, weight: .semibold)
     let textWidth = (wordmark as NSString).size(withAttributes: [.font: font, .kern: -2]).width
     let gap = size.height * 0.14

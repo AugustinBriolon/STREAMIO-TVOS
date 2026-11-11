@@ -8,7 +8,7 @@ public final class AwardsService {
     private var distinctionsByIMDb: [String: [AwardDistinction]] = [:]
     private var distinctionsByTMDB: [Int: [AwardDistinction]] = [:]
     private var distinctionsByTitle: [String: [AwardDistinction]] = [:]
-    private let queue = DispatchQueue(label: "com.vortxtv.awards-service", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.h6245.loge.awards-service", qos: .userInitiated)
 
     public init() {
         loadData()

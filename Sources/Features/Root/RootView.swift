@@ -33,6 +33,7 @@ struct RootView: View {
     @Environment(ProfileStore.self) private var profiles
     @Environment(LibraryStore.self) private var library
     @Environment(CloudSyncEngine.self) private var syncEngine
+    @Environment(AuthService.self) private var auth
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selected: AppTab = .home
     /// Pages are created on first visit and then kept alive, so they keep their data and scroll position.
@@ -58,6 +59,13 @@ struct RootView: View {
         ZStack(alignment: .leading) {
             Theme.Palette.canvas.ignoresSafeArea()
             pages.focusScope(contentScope)
+                .fullScreenCover(isPresented: Binding(
+                    get: { auth.showsWelcome },
+                    // Menu on the welcome screen means "not now", like "Continuer sans compte".
+                    set: { if !$0 && !auth.isAuthenticated { auth.dismissWelcome() } }
+                )) {
+                    WelcomeView()
+                }
             restingRailScrim
             railScrim
             // Icons live in the screen margin (outside the safe area), left of every page's content,
@@ -94,6 +102,19 @@ struct RootView: View {
         .onChange(of: library.syncRevision) {
             TopShelfRefresher.refresh()
             syncEngine.triggerPushDebounced()
+        }
+        // Creating, renaming or deleting a profile must reach the account too (ADR 0023).
+        .onChange(of: profiles.profiles) {
+            syncEngine.triggerPushDebounced()
+        }
+        // Auth cleared (revoked session / expired token): tear down playback so Welcome cannot
+        // sit on top of a still-audible player, and a later play cannot stack a second VLC instance.
+        .onChange(of: auth.isAuthenticated) { _, signedIn in
+            if !signedIn { playback.close() }
+        }
+        // The account's profiles replaced this device's first-launch profile: ask who is watching.
+        .onChange(of: profiles.adoptionCount) {
+            select(.profiles)
         }
         .onOpenURL(perform: open)
         // The system search keyboard cannot carry its own handler, so on Search's root screen Menu is

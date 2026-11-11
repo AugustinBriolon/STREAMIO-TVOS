@@ -1,4 +1,4 @@
-name: StremioTV
+name: Loge
 options:
   bundleIdPrefix: com.h6245
 settings:
@@ -6,9 +6,11 @@ settings:
     DEVELOPMENT_TEAM: 6X5CP5SFAG
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
+    # One build number for the app and its extension; release-testflight.sh overrides it (ADR 0022).
+    CURRENT_PROJECT_VERSION: 1
     DEVELOPMENT_LANGUAGE: fr
 targets:
-  StremioTV:
+  Loge:
     type: application
     platform: tvOS
     deploymentTarget: "18.0"
@@ -18,27 +20,29 @@ targets:
       # Fetched by scripts/fetch-vlckit.sh (ADR 0007).
       - framework: Vendor/TVVLCKit.xcframework
         embed: true
-      - target: StremioTVTopShelf
+      - target: LogeTopShelf
         embed: true
     entitlements:
-      path: Config/StremioTV.entitlements
+      path: Config/Loge.entitlements
       properties:
+        # Locked to the existing App Store Connect app / profiles (com.h6245.vortxtv).
         com.apple.security.application-groups: [group.com.h6245.vortxtv]
     info:
-      path: Config/StremioTV-Info.plist
+      path: Config/Loge-Info.plist
       properties:
-        # stremiotv://play?id=... opens the app from the Top Shelf (ADR 0015).
+        UIRequiredDeviceCapabilities: [arm64]
+        # loge://play?id=... opens the app from the Top Shelf (ADR 0015).
+        CFBundleDisplayName: Loge
         CFBundleURLTypes:
-          - CFBundleURLName: com.h6245.vortxtv.link
-            CFBundleURLSchemes: [stremiotv]
+          - CFBundleURLName: com.h6245.loge.link
+            CFBundleURLSchemes: [loge]
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.h6245.vortxtv
       GENERATE_INFOPLIST_FILE: YES
-      CURRENT_PROJECT_VERSION: 1
       MARKETING_VERSION: 2.0
       ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
       ENABLE_BITCODE: NO
-  StremioTVTopShelf:
+  LogeTopShelf:
     type: app-extension
     platform: tvOS
     deploymentTarget: "18.0"
@@ -54,8 +58,8 @@ targets:
     info:
       path: Config/TopShelf-Info.plist
       properties:
-        CFBundleDisplayName: StremioTV Top Shelf
-        # Same version as the app, or App Store validation rejects the embedded extension.
+        CFBundleDisplayName: Loge Top Shelf
+        UIRequiredDeviceCapabilities: [arm64]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -64,25 +68,24 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.h6245.vortxtv.topshelf
       GENERATE_INFOPLIST_FILE: YES
-      CURRENT_PROJECT_VERSION: 1
       MARKETING_VERSION: 2.0
-  StremioTVTests:
+  LogeTests:
     type: bundle.unit-test
     platform: tvOS
     deploymentTarget: "18.0"
     sources:
       - path: Tests
     dependencies:
-      - target: StremioTV
+      - target: Loge
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.h6245.vortxtv.tests
       GENERATE_INFOPLIST_FILE: YES
 schemes:
-  StremioTV:
+  Loge:
     build:
       targets:
-        StremioTV: all
-        StremioTVTests: [test]
+        Loge: all
+        LogeTests: [test]
     test:
       targets:
-        - StremioTVTests
+        - LogeTests

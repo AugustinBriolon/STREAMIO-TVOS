@@ -77,13 +77,13 @@ struct TopShelfEntry: Equatable, Identifiable {
 }
 
 /// Links from the Top Shelf into the app:
-/// `stremiotv://resume?id=<movie or episode id>`, `stremiotv://play?id=<title id>`, `stremiotv://details?id=<title id>`.
+/// `loge://resume?id=<movie or episode id>`, `loge://play?id=<title id>`, `loge://details?id=<title id>`.
 enum TopShelfLink: Equatable {
     case resume(String)
     case play(String)
     case details(String)
 
-    static let scheme = "stremiotv"
+    static let scheme = "loge"
 
     private var parts: (host: String, id: String) {
         switch self {

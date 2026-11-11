@@ -14,12 +14,15 @@ struct PlayerView: View {
     @State private var panel: TrackColumn?
     @FocusState private var focus: PlayerFocus?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AuthService.self) private var auth
 
     private static let controlsBandHeight: CGFloat = 170
     /// Strict: while the track panel or a button has focus the player must neither hide the controls
     /// nor react to remote touches.
     private var surfaceFocused: Bool { focus == .surface }
     private var isOverlayVisible: Bool { controlsVisible || scrubber.isActive }
+    /// Welcome/pairing can cover the player without disappearing it; stop VLC as soon as auth is cleared.
+    private var authLost: Bool { !auth.isAuthenticated }
 
     init(session: PlaybackSession, playback: PlaybackCoordinator) {
         self.session = session
@@ -87,8 +90,14 @@ struct PlayerView: View {
             ring = RemoteRingInput { radians in jog(radians) }
         }
         .onDisappear {
+            // Must stop libVLC here: dismissing the cover (or covering it with Welcome) otherwise
+            // leaves the media player alive, so a later play stacks a second audio stream.
             ring?.stop()
+            controller.close()
             RemoteTiltModel.shared.start()
+        }
+        .onChange(of: authLost) { _, lost in
+            if lost { controller.close() }
         }
         .onChange(of: session.id) {
             _ = scrubber.cancel()

@@ -12,7 +12,7 @@ public struct KeychainSecretStorage: SecretStorage {
     private let service: String
     private let account: String
 
-    public init(service: String = "com.h6245.vortxtv.addons", account: String = "addon-urls") {
+    public init(service: String = "com.h6245.loge.addons", account: String = "addon-urls") {
         self.service = service
         self.account = account
     }

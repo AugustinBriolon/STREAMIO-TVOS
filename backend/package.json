@@ -1,7 +1,7 @@
 {
-  "name": "stremiotv-backend",
+  "name": "loge-backend",
   "version": "1.0.0",
-  "description": "Cloudflare Worker & D1 Backend for StremioTV sync & auth",
+  "description": "Cloudflare Worker & D1 Backend for Loge sync & auth",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",

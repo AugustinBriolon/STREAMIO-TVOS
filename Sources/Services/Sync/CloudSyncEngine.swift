@@ -18,6 +18,9 @@ public final class CloudSyncEngine {
 
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
 
+    /// The account refused this device's token (its session was signed out from the web).
+    struct SessionRevoked: Error {}
+
     public init(
         auth: AuthService = .shared,
         profiles: ProfileStore,
@@ -30,7 +33,8 @@ public final class CloudSyncEngine {
         self.library = library
         self.addons = addons
         self.defaults = defaults
-        if let ts = defaults.object(forKey: "stremiotv.lastSyncDate") as? Date {
+        if let ts = defaults.object(forKey: "loge.lastSyncDate") as? Date
+            ?? defaults.object(forKey: "stremiotv.lastSyncDate") as? Date {
             self.lastSyncDate = ts
         }
     }
@@ -46,10 +50,16 @@ public final class CloudSyncEngine {
 
         do {
             try await pull(token: token)
-            try await push(token: token)
-            let now = Date()
-            lastSyncDate = now
-            defaults.set(now, forKey: "stremiotv.lastSyncDate")
+            // Pull may have replaced a legacy JWT with a session-bound one; push must use that.
+            if let pushToken = auth.token {
+                try await push(token: pushToken)
+                let now = Date()
+                lastSyncDate = now
+                defaults.set(now, forKey: "loge.lastSyncDate")
+            }
+        } catch is SessionRevoked {
+            // Signed out from another device: stop syncing, keep every local profile and history.
+            auth.handleRevokedSession()
         } catch {
             syncError = error.localizedDescription
         }
@@ -66,16 +76,31 @@ public final class CloudSyncEngine {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        Self.applyDeviceHeaders(&req)
 
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if status == 401 { throw SessionRevoked() }
+        guard status == 200 else {
             throw NSError(domain: "CloudSync", code: status, userInfo: [NSLocalizedDescriptionKey: "Échec du téléchargement (\(status))"])
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        if let upgraded = json["token"] as? String {
+            auth.adoptUpgradedToken(upgraded)
+        }
 
         let decoder = JSONDecoder()
+
+        // 0. Profils supprimés ailleurs (ADR 0023)
+        if let remoteDeleted = json["deletedProfiles"] as? [[String: Any]] {
+            var deletions: [UUID: Date] = [:]
+            for row in remoteDeleted {
+                guard let id = (row["id"] as? String).flatMap(UUID.init(uuidString:)) else { continue }
+                deletions[id] = Self.date(fromMilliseconds: row["deleted_at_ms"]) ?? Date()
+            }
+            profiles.applyRemoteDeletions(deletions)
+        }
 
         // 1. Profils distants
         if let remoteProfilesJson = json["profiles"] as? [[String: Any]] {
@@ -91,7 +116,12 @@ public final class CloudSyncEngine {
                 }
                 parsedProfiles.append(Profile(id: id, name: name, avatar: avatar))
             }
-            if !parsedProfiles.isEmpty {
+            // A device signing in for the first time takes the account's profiles instead of adding its
+            // empty "Profil 1" next to them.
+            if !parsedProfiles.isEmpty, profiles.isUntouchedDefault, library.myList.isEmpty, library.allProgress.isEmpty {
+                profiles.adoptRemote(parsedProfiles)
+                library.switchProfile(to: profiles.activeID)
+            } else if !parsedProfiles.isEmpty {
                 profiles.mergeProfiles(parsedProfiles)
             }
         }
@@ -328,8 +358,15 @@ public final class CloudSyncEngine {
         // 4. Addons
         let addonsPayload = addons.urls
 
+        // 5. Profils supprimés
+        let reportedDeletions = profiles.deletedProfiles
+        let deletedProfilesPayload: [[String: Any]] = reportedDeletions.map { id, date in
+            ["id": id.uuidString, "deletedAtMs": Self.milliseconds(from: date)]
+        }
+
         let body: [String: Any] = [
             "profiles": profilesPayload,
+            "deletedProfiles": deletedProfilesPayload,
             "progress": progressPayload,
             "deletedProgress": deletedProgressPayload,
             "myList": myListPayload,
@@ -341,26 +378,46 @@ public final class CloudSyncEngine {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        Self.applyDeviceHeaders(&req)
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (_, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if status == 401 { throw SessionRevoked() }
+        guard status == 200 else {
             throw NSError(domain: "CloudSync", code: status, userInfo: [NSLocalizedDescriptionKey: "Échec de l'envoi (\(status))"])
         }
+        if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let upgraded = json["token"] as? String {
+            auth.adoptUpgradedToken(upgraded)
+        }
+        profiles.clearReportedDeletions(Set(reportedDeletions.keys))
     }
 
     /// Déclenche un envoi après délai d'inactivité (debounced).
+    /// Push only: a full sync would pull first and overwrite the local edit we are trying to upload.
     public func triggerPushDebounced() {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(3))
-            guard let self, !Task.isCancelled else { return }
-            await self.sync()
+            guard let self, !Task.isCancelled, let token = self.auth.token else { return }
+            do {
+                try await self.push(token: token)
+            } catch is SessionRevoked {
+                self.auth.handleRevokedSession()
+            } catch {
+                self.syncError = error.localizedDescription
+            }
         }
     }
 
     // MARK: - Helpers
+
+    private static func applyDeviceHeaders(_ request: inout URLRequest) {
+        let device = DeviceIdentity.current
+        request.setValue(device.name, forHTTPHeaderField: "X-Device-Name")
+        request.setValue(device.model, forHTTPHeaderField: "X-Device-Model")
+    }
 
     private static func date(fromMilliseconds value: Any?) -> Date? {
         guard let num = value as? NSNumber else { return nil }

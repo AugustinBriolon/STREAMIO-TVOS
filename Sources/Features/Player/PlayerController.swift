@@ -16,6 +16,7 @@ final class PlayerController {
     @ObservationIgnored private var appliedDefaultTracks = false
     @ObservationIgnored private var lastSavedAt: Double = 0
     @ObservationIgnored private var monitor: Task<Void, Never>?
+    @ObservationIgnored private var didClose = false
 
     /// A file whose video cannot be decoded plays audio only; give up on it after this much playback.
     static let noPictureTimeout: Double = 6
@@ -37,6 +38,7 @@ final class PlayerController {
     func load(_ newSession: PlaybackSession) {
         guard newSession.id != session?.id else { return }
         saveProgress(force: true)
+        didClose = false
         session = newSession
         candidateIndex = 0
         // Pick the tracks the moment playback starts instead of on the next 1 s tick: every
@@ -53,6 +55,11 @@ final class PlayerController {
     }
 
     func close() {
+        guard !didClose else {
+            engine.stop()
+            return
+        }
+        didClose = true
         saveProgress(force: true)
         monitor?.cancel()
         engine.stop()
