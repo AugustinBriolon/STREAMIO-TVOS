@@ -87,6 +87,27 @@ public final class ProfileStore {
         persist()
     }
 
+    /// Merges remote profiles pulled from cloud sync, preserving local count limits.
+    public func mergeProfiles(_ incoming: [Profile]) {
+        var updated = profiles
+        var changed = false
+        for profile in incoming {
+            if let idx = updated.firstIndex(where: { $0.id == profile.id }) {
+                if updated[idx].name != profile.name || updated[idx].avatar != profile.avatar {
+                    updated[idx] = profile
+                    changed = true
+                }
+            } else if updated.count < Self.maxProfiles {
+                updated.append(profile)
+                changed = true
+            }
+        }
+        if changed {
+            profiles = updated
+            persist()
+        }
+    }
+
     // MARK: Private
 
     private func validated(_ name: String, excluding id: UUID?) throws -> String {

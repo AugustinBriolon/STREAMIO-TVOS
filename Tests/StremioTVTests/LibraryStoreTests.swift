@@ -18,6 +18,27 @@ struct LibraryStoreTests {
         #expect(!store.isInMyList("tt1"))
     }
 
+    @Test func togglesMyListAcrossTMDBAndIMDbAliases() {
+        let store = makeStore()
+        let preResolved = movie("tmdb:12345")
+        let canonical = movie("tt9999999")
+        let aliases = ["tmdb:12345", "tt9999999"]
+
+        // Added before resolution under TMDB ID
+        store.toggleMyList(preResolved, aliases: aliases)
+        #expect(store.isInMyList(anyOf: aliases))
+
+        // Toggling with canonical IMDb item removes the TMDB entry instead of duplicating
+        store.toggleMyList(canonical, aliases: aliases)
+        #expect(!store.isInMyList(anyOf: aliases))
+        #expect(store.myList.isEmpty)
+
+        // Added after resolution under IMDb ID, still recognized from TMDB catalog item
+        store.toggleMyList(canonical, aliases: aliases)
+        #expect(store.isInMyList(anyOf: ["tmdb:12345"]))
+        #expect(store.myList.count == 1)
+    }
+
     @Test func resumesOnlyBetweenThresholds() {
         let store = makeStore()
         store.updateProgress(item: movie("a"), video: nil, position: 10, duration: 6000)
@@ -83,5 +104,79 @@ struct ContinueWatchingRemovalTests {
         #expect(store.isWatched("tt1:1:1"))
         #expect(store.progress(for: "tt1:1:2") == nil)
         #expect(store.resumeEntry(forTitle: "tt1") == nil)
+    }
+
+    @Test func deletedMyListSurvivesRemoteMergeUntilReAdded() {
+        let defaults = makeDefaults()
+        let clock = TestClock()
+        let store = LibraryStore(defaults: defaults, now: clock.now)
+        let item = movie("tt1")
+
+        store.toggleMyList(item)
+        let tAdd = store.myListAddedAt(for: "tt1")!
+        store.toggleMyList(item)
+        let tDel = store.deletedMyListEntries["tt1"]!
+        #expect(!store.isInMyList("tt1"))
+        #expect(tDel > tAdd)
+
+        // Remote pull still holding the older copy must NOT resurrect it.
+        store.mergeRemote(items: [item], remoteTimestamps: ["tt1": tAdd], remoteDeletions: [:])
+        #expect(!store.isInMyList("tt1"))
+
+        // Re-adding later clears the tombstone and survives remote old deletion tombstones.
+        store.toggleMyList(item)
+        store.mergeRemote(items: [], remoteTimestamps: [:], remoteDeletions: ["tt1": tDel])
+        #expect(store.isInMyList("tt1"))
+    }
+
+    @Test func deletedProgressSurvivesRemoteMergeAndAppliesRemoteTombstone() {
+        let defaults = makeDefaults()
+        let clock = TestClock()
+        let store = LibraryStore(defaults: defaults, now: clock.now)
+        let item = movie("m1")
+
+        store.updateProgress(item: item, video: nil, position: 500, duration: 5000)
+        let tWatch = store.progress(for: "m1")!.updatedAt
+        let revisionBeforeDelete = store.syncRevision
+        store.removeFromContinueWatching(titleID: "m1")
+        let tDelete = store.deletedProgressEntries["m1"]!
+        #expect(store.syncRevision > revisionBeforeDelete)
+        #expect(store.continueWatching().isEmpty)
+
+        // Older remote progress must NOT resurrect the deleted entry.
+        let staleRemote = PlaybackProgress(item: item, video: nil, position: 500, duration: 5000, updatedAt: tWatch)
+        store.mergeRemote(progress: [staleRemote], remoteDeletions: [:])
+        #expect(store.continueWatching().isEmpty)
+
+        // Re-watching later survives an older remote tombstone, while a newer remote tombstone removes it.
+        store.updateProgress(item: item, video: nil, position: 800, duration: 5000)
+        let tRewatch = store.progress(for: "m1")!.updatedAt
+        store.mergeRemote(progress: [], remoteDeletions: ["m1": tDelete])
+        #expect(store.continueWatching().count == 1)
+
+        let tRemoteDelete = clock.now()
+        #expect(tRemoteDelete > tRewatch)
+        store.mergeRemote(progress: [], remoteDeletions: ["m1": tRemoteDelete])
+        #expect(store.continueWatching().isEmpty)
+    }
+}
+
+struct FocusNeighborTests {
+    @Test func picksRightNeighborWhenRemovingFirstOrMiddleItem() {
+        #expect(FocusNeighbor.nearestRemainingID(in: ["a", "b", "c"], removing: "a") == "b")
+        #expect(FocusNeighbor.nearestRemainingID(in: ["a", "b", "c"], removing: "b") == "c")
+    }
+
+    @Test func picksLeftNeighborWhenRemovingLastItem() {
+        #expect(FocusNeighbor.nearestRemainingID(in: ["a", "b", "c"], removing: "c") == "b")
+    }
+
+    @Test func returnsNilWhenRemovingOnlyRemainingItem() {
+        #expect(FocusNeighbor.nearestRemainingID(in: ["a"], removing: "a") == nil)
+    }
+
+    @Test func handlesReturningAfterMultipleRemovalsAcrossNavigation() {
+        #expect(FocusNeighbor.nearestRemaining(oldIDs: ["a", "b", "c", "d"], newIDs: ["a", "d"], removedID: "b") == "d")
+        #expect(FocusNeighbor.nearestRemaining(oldIDs: ["a", "b", "c"], newIDs: ["a"], removedID: "c") == "a")
     }
 }

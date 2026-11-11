@@ -35,9 +35,10 @@ After ADR 0010 the owner could not open the rail at all. The rail was disabled u
 
 ### Positive
 - Left from any card, and Menu, both open the rail; the current page is obvious in both the collapsed and expanded rail.
+- Vertical focus is locked inside the rail: scrolling all the way down clamps to Profils with elastic rubber-band feedback without dropping focus onto the page. Moving right cleanly returns to the page.
 
 ### Negative
-- Pressing down from the last rail icon moves focus to the content below instead of stopping, because the focus engine looks for the next item in that direction.
+- None (downward escape from the last rail item resolved via 1D vector clamping and focus notification guard).
 
 ### Neutral
 - Frame pacing was not re-measured for this change (the rail itself measured 5.5 % of frames above 25 ms in ADR 0010).

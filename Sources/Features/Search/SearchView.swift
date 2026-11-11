@@ -2,26 +2,33 @@ import SwiftUI
 
 struct SearchView: View {
     @State private var model = SearchViewModel()
-    @State private var backdrop = BackdropModel()
-    @State private var path = NavigationPath()
+    @Binding var path: NavigationPath
     /// Reports whether the root screen is showing (no title page pushed).
     @Binding var atRoot: Bool
+
+    init(path: Binding<NavigationPath> = .constant(NavigationPath()), atRoot: Binding<Bool> = .constant(true)) {
+        _path = path
+        _atRoot = atRoot
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
-                DynamicBackdrop(model: backdrop)
+                Theme.Palette.canvas.ignoresSafeArea()
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
                         results
+                            .transition(.opacity)
                     }
                     .padding(.vertical, Theme.Spacing.l)
+                    .animation(Theme.Motion.fade, value: model.state)
                 }
                 .scrollIndicators(.hidden)
             }
             .opensRailOnExit()
             .searchable(text: $model.query, prompt: "Films, séries…")
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
+            .navigationDestination(for: CastMember.self) { PersonDetailView(member: $0) }
         }
         .task { await model.loadSuggestions() }
         .onChange(of: path.count) { _, count in atRoot = count == 0 }
@@ -30,7 +37,7 @@ struct SearchView: View {
     @ViewBuilder
     private var results: some View {
         if model.trimmedQuery.isEmpty {
-            if !model.suggestions.isEmpty { PosterGrid(title: "Recherches populaires", items: model.suggestions, onFocus: backdrop.focus) }
+            if !model.suggestions.isEmpty { PosterGrid(title: "Recherches populaires", items: model.suggestions) }
         } else {
             switch model.state {
             case .loading where !model.hasResults, .idle:
@@ -39,8 +46,8 @@ struct SearchView: View {
                 StateView(kind: .error(message) { model.query = model.query + "" }).frame(height: 500)
             default:
                 if model.hasResults {
-                    if !model.movies.isEmpty { PosterGrid(title: "Films", items: model.movies, onFocus: backdrop.focus) }
-                    if !model.series.isEmpty { PosterGrid(title: "Séries", items: model.series, onFocus: backdrop.focus) }
+                    if !model.movies.isEmpty { PosterGrid(title: "Films", items: model.movies) }
+                    if !model.series.isEmpty { PosterGrid(title: "Séries", items: model.series) }
                 } else {
                     StateView(kind: .empty(
                         symbol: "magnifyingglass",
@@ -54,7 +61,7 @@ struct SearchView: View {
     }
 }
 
-/// Wrapping grid of posters with a title, shared by Search and Ma liste.
+/// Wrapping grid of posters with a title, shared by Search.
 struct PosterGrid: View {
     let title: String?
     let items: [MediaItem]

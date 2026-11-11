@@ -97,18 +97,41 @@ final class VLCPlayerEngine: NSObject {
 
     private func refreshTracks() {
         // @Observable notifies on every assignment, even of an equal value: only publish real changes.
-        let audio = Self.tracks(names: player.audioTrackNames, indexes: player.audioTrackIndexes)
-        let subtitles = Self.tracks(names: player.videoSubTitlesNames, indexes: player.videoSubTitlesIndexes)
+        let metadata = Self.trackMetadataMap(from: player.media?.tracksInformation)
+        let audio = Self.tracks(names: player.audioTrackNames, indexes: player.audioTrackIndexes, metadata: metadata)
+        let subtitles = Self.tracks(names: player.videoSubTitlesNames, indexes: player.videoSubTitlesIndexes, metadata: metadata)
         if audio != audioTracks { audioTracks = audio }
         if subtitles != subtitleTracks { subtitleTracks = subtitles }
         if selectedAudioID != player.currentAudioTrackIndex { selectedAudioID = player.currentAudioTrackIndex }
         if selectedSubtitleID != player.currentVideoSubTitleIndex { selectedSubtitleID = player.currentVideoSubTitleIndex }
     }
 
-    private static func tracks(names: [Any], indexes: [Any]) -> [MediaTrack] {
+    private static func trackMetadataMap(from info: [Any]?) -> [Int32: (language: String?, description: String?)] {
+        guard let dicts = info as? [[String: Any]] else { return [:] }
+        var map: [Int32: (language: String?, description: String?)] = [:]
+        for dict in dicts {
+            guard let id = (dict[VLCMediaTracksInformationId] as? NSNumber)?.int32Value else { continue }
+            let lang = dict[VLCMediaTracksInformationLanguage] as? String
+            let desc = dict[VLCMediaTracksInformationDescription] as? String
+            map[id] = (lang, desc)
+        }
+        return map
+    }
+
+    private static func tracks(
+        names: [Any],
+        indexes: [Any],
+        metadata: [Int32: (language: String?, description: String?)]
+    ) -> [MediaTrack] {
         zip(indexes, names).compactMap { index, name in
-            guard let id = (index as? NSNumber)?.int32Value, let name = name as? String else { return nil }
-            return MediaTrack(id: id, name: name)
+            guard let id = (index as? NSNumber)?.int32Value, var finalName = name as? String else { return nil }
+            // Si VLC n'a pas inclus la langue entre crochets, enrichir depuis tracksInformation
+            if id >= 0, finalName.range(of: #"\[[^\]]+\]\s*$"#, options: .regularExpression) == nil,
+               let langRaw = metadata[id]?.language,
+               let localized = TrackDisplay.localizedLanguageName(langRaw) {
+                finalName = "\(finalName) - [\(localized)]"
+            }
+            return MediaTrack(id: id, name: finalName)
         }
     }
 

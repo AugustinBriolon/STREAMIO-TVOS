@@ -21,3 +21,7 @@ xcuserdata/
 
 # Third-party binaries fetched by scripts/fetch-vlckit.sh
 Vendor/
+
+# Node / Backend
+node_modules/
+.wrangler/

@@ -57,6 +57,25 @@ struct TrackSelectorTests {
         let tracks = [MediaTrack(id: 1, name: "DTS 5.1 - [French]"), MediaTrack(id: 2, name: "AC3 5.1 - [French]")]
         #expect(TrackSelector.preferredAudio(tracks)?.id == 2)
     }
+
+    @Test func subtitleModeOffAlwaysReturnsNil() {
+        let audio = TrackSelector.preferredAudio(remuxAudio)
+        let sub = TrackSelector.preferredSubtitle(remuxSubtitles, audio: audio, mode: .off, language: "fr", audioLanguage: "fr")
+        #expect(sub == nil)
+    }
+
+    @Test func subtitleModeAlwaysOnPicksFullEvenWithMatchingAudio() {
+        let audio = TrackSelector.preferredAudio(remuxAudio)
+        let sub = TrackSelector.preferredSubtitle(remuxSubtitles, audio: audio, mode: .alwaysOn, language: "fr", audioLanguage: "fr")
+        // Should select full French subtitle (id: 13, SRT VFF Full), NOT forced (id: 12)
+        #expect(sub?.id == 13)
+    }
+
+    @Test func picksEnglishAudioWhenRequested() {
+        let audio = TrackSelector.preferredAudio(remuxAudio, language: "en")
+        // Tracks 3 and 4 are English; 4 is EAC3 Dolby which gets +20 over TrueHD track 3
+        #expect(audio?.id == 4)
+    }
 }
 
 /// Names taken from real files returned by the user's addon.
@@ -68,13 +87,19 @@ struct TrackDisplayTests {
         ("PGS Français (VFF) [Forced] - [French]", "PGS Français (VFF) [Forced]"),
         ("SRT Anglais [SDH] - [English]", "SRT Anglais [SDH]"),
         ("English", "English"),
-        ("Track 1 - [French]", "Track 1"),
+        ("Track 1 - [French]", "Français · Piste 1"),
+        ("Track 4 - [French]", "Français · Piste 4"),
+        ("European - [Spanish]", "Espagnol (Européen)"),
+        ("Forced - [French]", "Français (Forcés)"),
+        ("Track 4", "Piste 4"),
+        ("European", "Européen"),
     ])
-    func stripsBitrateAndLanguageSuffix(raw: String, expected: String) {
+    func formatsTrackNamesWithoutLosingLanguage(raw: String, expected: String) {
         #expect(TrackDisplay.title(raw) == expected)
     }
 
     @Test func neverReturnsAnEmptyTitle() {
-        #expect(TrackDisplay.title(" - [French]") == " - [French]")
+        #expect(TrackDisplay.title(" - [French]") == "Français")
+        #expect(!TrackDisplay.title("   ").isEmpty)
     }
 }

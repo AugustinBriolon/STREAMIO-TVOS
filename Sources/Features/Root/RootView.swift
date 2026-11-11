@@ -32,14 +32,15 @@ struct RootView: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(ProfileStore.self) private var profiles
     @Environment(LibraryStore.self) private var library
+    @Environment(CloudSyncEngine.self) private var syncEngine
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selected: AppTab = .home
     /// Pages are created on first visit and then kept alive, so they keep their data and scroll position.
     @State private var visited: Set<AppTab> = [.home]
+    @State private var router = NavigationRouter()
     @Environment(\.resetFocus) private var resetFocus
     @Namespace private var contentScope
     @State private var opener = RailOpener()
-    /// False while a title page is pushed on Search: there Menu must go back, not open the rail.
-    @State private var searchAtRoot = true
     /// A title the Top Shelf asked to show: the home page pushes its detail page.
     @State private var linkedTitle: MediaItem?
     /// The rail is the left-most focusable view: enabled from the start it wins the focus at launch (the page
@@ -48,6 +49,7 @@ struct RootView: View {
     /// a selection and the next page focus (`railSuppressed`). From then on moving left from any card reaches it.
     @State private var railReady = false
     @State private var railSuppressed = false
+    @State private var lastRailTab: AppTab?
     private var railEnabled: Bool { railReady && !railSuppressed }
     @FocusState private var railFocus: AppTab?
 
@@ -59,7 +61,15 @@ struct RootView: View {
             railScrim
             // Icons live in the screen margin (outside the safe area), left of every page's content,
             // so the rail never overlaps a card the focus engine could confuse with it.
-            NavRail(selected: selected, profileName: profiles.active.name, focus: $railFocus, onSelect: select)
+            NavRail(
+                selected: selected,
+                profileName: profiles.active.name,
+                profileAvatar: profiles.active.avatar,
+                isAtRoot: { router.isAtRoot(for: $0) },
+                focus: $railFocus,
+                onSelect: select,
+                onExitToPage: returnFocusToPage
+            )
                 .padding(.leading, Theme.Spacing.l)
                 .ignoresSafeArea(edges: .leading)
                 .disabled(!railEnabled)
@@ -71,18 +81,25 @@ struct RootView: View {
         .onChange(of: profiles.activeID) { _, id in
             library.switchProfile(to: id)
             TopShelfRefresher.refresh()
+            syncEngine.triggerPushDebounced()
         }
         // The Top Shelf shows the profile's "Reprendre la lecture": refresh it when a playback ends.
         .onChange(of: playback.session == nil) { _, ended in
-            if ended { TopShelfRefresher.refresh() }
+            if ended {
+                TopShelfRefresher.refresh()
+                syncEngine.triggerPushDebounced()
+            }
         }
-        .onChange(of: library.myList.map(\.id)) { TopShelfRefresher.refresh() }
+        .onChange(of: library.syncRevision) {
+            TopShelfRefresher.refresh()
+            syncEngine.triggerPushDebounced()
+        }
         .onOpenURL(perform: open)
         // The system search keyboard cannot carry its own handler, so on Search's root screen Menu is
         // caught here. Everywhere else it is either a page handler (`opensRailOnExit`), a pushed screen
         // (Menu goes back: a root handler would swallow it, measured on device) or the rail itself
         // (Menu keeps its system meaning: leave the app).
-        .onExitCommand(perform: railFocus == nil && selected == .search && searchAtRoot ? { opener.open() } : nil)
+        .onExitCommand(perform: railFocus == nil && selected == .search && router.isAtRoot(for: .search) ? { opener.open() } : nil)
         .onAppear {
             opener.open = {
                 railReady = true
@@ -95,15 +112,20 @@ struct RootView: View {
         }
         // Entering the rail from a page lands on the current destination, not on whichever icon is nearest in height.
         .onChange(of: railFocus) { old, new in
+            if let new { lastRailTab = new }
             guard old == nil, let new, new != selected else { return }
             railFocus = selected
+            lastRailTab = selected
         }
         .onReceive(NotificationCenter.default.publisher(for: UIFocusSystem.didUpdateNotification)) { note in
-            // A page element took the focus: the rail may now be reached by moving left.
             let context = note.userInfo?[UIFocusSystem.focusUpdateContextUserInfoKey] as? UIFocusUpdateContext
-            guard railFocus == nil, context?.nextFocusedItem != nil else { return }
+            guard let context else { return }
+
+            // A page element took the focus: the rail may now be reached by moving left.
+            guard railFocus == nil, context.nextFocusedItem != nil else { return }
             railReady = true
             railSuppressed = false
+            lastRailTab = nil
         }
         .overlay {
             if playback.isResolving {
@@ -113,7 +135,7 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
-        .animation(Theme.Motion.panel, value: playback.isResolving)
+        .animation(Theme.Motion.fade, value: playback.isResolving)
         .fullScreenCover(isPresented: Binding(
             get: { playback.session != nil },
             set: { if !$0 { playback.close() } }
@@ -137,6 +159,7 @@ struct RootView: View {
             ForEach(AppTab.allCases, id: \.self) { tab in
                 if visited.contains(tab) {
                     page(for: tab)
+                        .transition(.identity)
                         .opacity(tab == selected ? 1 : 0)
                         .zIndex(tab == selected ? 1 : 0)
                         // Hidden pages must not hold focus or be read by VoiceOver.
@@ -150,26 +173,38 @@ struct RootView: View {
     @ViewBuilder
     private func page(for tab: AppTab) -> some View {
         switch tab {
-        case .home: HomeView(scope: nil, linkedTitle: $linkedTitle)
-        case .movies: HomeView(scope: .movie)
-        case .series: HomeView(scope: .series)
-        case .myList: MyListView()
-        case .search: SearchView(atRoot: $searchAtRoot)
+        case .home: HomeView(scope: nil, path: router.path(for: .home), linkedTitle: $linkedTitle)
+        case .movies: HomeView(scope: .movie, path: router.path(for: .movies))
+        case .series: HomeView(scope: .series, path: router.path(for: .series))
+        case .myList: MyListView(path: router.path(for: .myList))
+        case .search: SearchView(path: router.path(for: .search), atRoot: Binding(
+            get: { router.isAtRoot(for: .search) },
+            set: { _ in }
+        ))
         case .settings: SettingsView(isActive: selected == .settings)
         case .profiles: ProfilesView(onSwitched: { select(.home) })
         }
     }
 
-    /// Soft fade (not a panel) so names stay readable over bright artwork while the rail has focus.
+    /// Soft progressive fade so titles stay crisp over bright hero artwork while the rail is expanded.
     private var railScrim: some View {
-        LinearGradient(colors: [.black.opacity(0.95), .black.opacity(0.85), .clear],
-                       startPoint: .leading, endPoint: .trailing)
-            .frame(width: 640)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .opacity(railFocus != nil ? 1 : 0)
-            .animation(Theme.Motion.panel, value: railFocus != nil)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.92), location: 0.0),
+                .init(color: .black.opacity(0.85), location: 0.30),
+                .init(color: .black.opacity(0.50), location: 0.65),
+                .init(color: .black.opacity(0.15), location: 0.85),
+                .init(color: .clear, location: 1.0)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: 680)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .opacity(railFocus != nil ? 1 : 0)
+        .animation(Theme.Motion.panel, value: railFocus != nil)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     /// Top Shelf links (ADR 0016): the Play button resumes or plays, selecting an item shows its page.
@@ -185,13 +220,23 @@ struct RootView: View {
             guard let item = library.item(withID: id) else { return }
             playback.close()
             if selected != .home { select(.home) }
-            linkedTitle = item
+            router.homePath = NavigationPath([item])
         case nil:
             break
         }
     }
 
     private func select(_ tab: AppTab) {
+        if selected == tab {
+            // Contrat Apple HIG Pop to Root: re-sélectionner l'onglet actif dépile immédiatement la navigation.
+            if !router.isAtRoot(for: tab) {
+                withAnimation(Theme.Motion.fade) {
+                    router.popToRoot(for: tab)
+                }
+                returnFocusToPage()
+                return
+            }
+        }
         visited.insert(tab)
         withAnimation(Theme.Motion.fade) { selected = tab }
         returnFocusToPage()

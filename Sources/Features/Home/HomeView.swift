@@ -6,15 +6,20 @@ struct HomeView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
     @FocusState private var focused: String?
+    @State private var lastFocusedToken: String?
+    @State private var pendingFocusToken: String?
+    @State private var focusRestoreTarget: String?
+    @State private var focusRestoreTask: Task<Void, Never>?
     @State private var playOrigin: String?
     @State private var backdrop = BackdropModel()
 
-    @State private var path = NavigationPath()
+    @Binding private var path: NavigationPath
     /// A title to show on top of this page (Top Shelf link); consumed once pushed.
     @Binding private var linkedTitle: MediaItem?
 
-    init(scope: MediaType?, linkedTitle: Binding<MediaItem?> = .constant(nil)) {
+    init(scope: MediaType?, path: Binding<NavigationPath> = .constant(NavigationPath()), linkedTitle: Binding<MediaItem?> = .constant(nil)) {
         _model = State(initialValue: HomeViewModel(scope: scope))
+        _path = path
         _linkedTitle = linkedTitle
     }
 
@@ -29,9 +34,36 @@ struct HomeView: View {
             }
             .opensRailOnExit()
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
+            .navigationDestination(for: CastMember.self) { PersonDetailView(member: $0) }
+            .navigationDestination(for: BrandHub.self) { HubCatalogView(hub: $0) }
+            .navigationDestination(for: SagaCollection.self) { SagaDetailView(saga: $0) }
         }
         .restoresFocusAfterPlayback($focused, to: playOrigin)
         .task { await model.loadIfNeeded() }
+        .onChange(of: focused) { _, newValue in
+            if let newValue {
+                lastFocusedToken = newValue
+            }
+        }
+        .onChange(of: scopedMyList.map(\.id)) { oldIDs, newIDs in
+            guard let last = lastFocusedToken,
+                  last.hasPrefix("mylist-") else { return }
+            let removedID = String(last.dropFirst(7))
+            guard oldIDs.contains(removedID), !newIDs.contains(removedID) else { return }
+            let nextID = FocusNeighbor.nearestRemaining(oldIDs: oldIDs, newIDs: newIDs, removedID: removedID)
+            let nextToken = nextID.map { "mylist-\($0)" } ?? (model.billboard != nil ? "billboard" : nil)
+            guard let nextToken else { return }
+            if path.isEmpty {
+                restoreFocusSoon(nextToken)
+            } else {
+                pendingFocusToken = nextToken
+            }
+        }
+        .onChange(of: path.count) { _, count in
+            guard count == 0, let nextToken = pendingFocusToken else { return }
+            pendingFocusToken = nil
+            restoreFocusSoon(nextToken)
+        }
         .onChange(of: linkedTitle, initial: true) { _, item in
             guard let item else { return }
             path = NavigationPath([item])
@@ -57,7 +89,7 @@ struct HomeView: View {
                             onPlay: { play(from: "billboard") { await playback.play(item: billboard) } },
                             onToggleMyList: { library.toggleMyList(billboard) },
                             playFocus: $focused,
-                            onFocus: { backdrop.focus(nil) }
+                            onFocus: { markFocused("billboard", backdropItem: nil) }
                         )
                     }
                     rows
@@ -84,13 +116,12 @@ struct HomeView: View {
                         progress: entry.fraction
                     )
                 }
-                .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(entry.item) }))
+                .buttonStyle(CardFocusStyle(onFocus: { markFocused("resume-\(entry.item.id)", backdropItem: entry.item) }))
                 .focused($focused, equals: "resume-\(entry.item.id)")
                 // Long press on the clickpad.
                 .contextMenu {
                     Button("Retirer de Reprendre la lecture", systemImage: "xmark.circle", role: .destructive) {
-                        library.removeFromContinueWatching(titleID: entry.item.id)
-                        TopShelfRefresher.refresh()
+                        removeContinueWatching(entry, from: resumable)
                     }
                     Button(library.isInMyList(entry.item.id) ? "Retirer de Ma liste" : "Ajouter à Ma liste",
                            systemImage: library.isInMyList(entry.item.id) ? "checkmark" : "plus") {
@@ -100,22 +131,209 @@ struct HomeView: View {
             }
         }
 
-        let myList = library.myList.filter { model.scope == nil || $0.type == model.scope }
-        if !myList.isEmpty {
-            posterRow("Ma liste", items: myList)
+        switch model.scope {
+        case .movie:
+            movieContentRows
+        case .series:
+            seriesContentRows
+        case nil:
+            homeContentRows
+        }
+    }
+
+    @ViewBuilder
+    private var movieContentRows: some View {
+        if !model.nowPlaying.isEmpty {
+            posterRow("Actuellement au cinéma", items: model.nowPlaying)
+        }
+
+        hubRow("Plateformes de streaming", hubs: model.moviePlatforms)
+
+        if !model.trendingWeek.isEmpty {
+            posterRow("Tendances de la semaine", items: model.trendingWeek)
         }
 
         if !model.top10.isEmpty {
-            ShelfRow(model.top10Title, items: Array(model.top10.enumerated()), id: \.element.id) { entry in
-                NavigationLink(value: entry.element) {
-                    Top10Card(rank: entry.offset + 1, item: entry.element)
-                }
-                .buttonStyle(CardFocusStyle(showsRing: false, onFocus: { backdrop.focus(entry.element) }))
-            }
+            top10Row
+        }
+
+        if !model.sagas.isEmpty {
+            sagaRow("Sagas & Franchises", sagas: model.sagas)
+        }
+
+        hubRow("Studios de cinéma", hubs: model.movieStudios)
+
+        if !model.awardedMovies.isEmpty {
+            awardedMediaRow("Films primés", entries: model.awardedMovies)
+        }
+
+        let myList = scopedMyList
+        if !myList.isEmpty {
+            myListRow(items: myList)
         }
 
         ForEach(model.shelves) { shelf in
             posterRow(shelf.title, items: shelf.items)
+        }
+    }
+
+    @ViewBuilder
+    private var seriesContentRows: some View {
+        if !model.trendingWeek.isEmpty {
+            posterRow("Tendances de la semaine", items: model.trendingWeek)
+        }
+
+        hubRow("Plateformes de streaming", hubs: model.seriesPlatforms)
+
+        if !model.top10.isEmpty {
+            top10Row
+        }
+
+        hubRow("Studios & Chaînes de prestige", hubs: model.seriesNetworks)
+
+        if !model.awardedSeries.isEmpty {
+            awardedMediaRow("Séries primées", entries: model.awardedSeries)
+        }
+
+        let myList = scopedMyList
+        if !myList.isEmpty {
+            myListRow(items: myList)
+        }
+
+        ForEach(model.shelves) { shelf in
+            posterRow(shelf.title, items: shelf.items)
+        }
+    }
+
+    @ViewBuilder
+    private var homeContentRows: some View {
+        if !model.top10.isEmpty {
+            top10Row
+        }
+
+        if !model.trendingWeek.isEmpty {
+            posterRow("Tendances de la semaine", items: model.trendingWeek)
+        }
+
+        hubRow("Plateformes de streaming", hubs: model.moviePlatforms)
+
+        if !model.nowPlaying.isEmpty {
+            posterRow("Actuellement au cinéma", items: model.nowPlaying)
+        }
+
+        if !model.sagas.isEmpty {
+            sagaRow("Sagas & Franchises", sagas: model.sagas)
+        }
+
+        if !model.awardedMovies.isEmpty {
+            awardedMediaRow("Films primés", entries: model.awardedMovies)
+        }
+
+        if !model.awardedSeries.isEmpty {
+            awardedMediaRow("Séries primées", entries: model.awardedSeries)
+        }
+
+        let myList = scopedMyList
+        if !myList.isEmpty {
+            myListRow(items: myList)
+        }
+
+        ForEach(model.shelves) { shelf in
+            posterRow(shelf.title, items: shelf.items)
+        }
+    }
+
+    private var top10Row: some View {
+        ShelfRow(model.top10Title, items: Array(model.top10.enumerated()), id: \.element.id) { entry in
+            NavigationLink(value: entry.element) {
+                Top10Card(rank: entry.offset + 1, item: entry.element)
+            }
+            .buttonStyle(CardFocusStyle(showsRing: false, onFocus: { backdrop.focus(entry.element) }))
+        }
+    }
+
+    private func hubRow(_ title: String, hubs: [BrandHub]) -> some View {
+        ShelfRow(title, items: hubs) { hub in
+            NavigationLink(value: hub) {
+                BrandHubCard(hub: hub)
+            }
+            .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(nil) }))
+        }
+    }
+
+    private var scopedMyList: [MediaItem] {
+        guard let scope = model.scope else { return library.myList }
+        return library.myList.filter { $0.type == scope }
+    }
+
+    private func myListRow(items: [MediaItem]) -> some View {
+        ShelfRow("Ma liste", items: items) { item in
+            NavigationLink(value: item) { PosterCard(item: item) }
+                .buttonStyle(CardFocusStyle(onFocus: { markFocused("mylist-\(item.id)", backdropItem: item) }))
+                .focused($focused, equals: "mylist-\(item.id)")
+                .contextMenu {
+                    Button("Retirer de Ma liste", systemImage: "xmark.circle", role: .destructive) {
+                        removeFromMyList(item, in: items)
+                    }
+                }
+        }
+    }
+
+    private func markFocused(_ token: String, backdropItem: MediaItem?) {
+        backdrop.focus(backdropItem)
+        lastFocusedToken = token
+        if focusRestoreTarget == token {
+            focusRestoreTarget = nil
+            focusRestoreTask?.cancel()
+        }
+    }
+
+    private func removeContinueWatching(_ entry: PlaybackProgress, from resumable: [PlaybackProgress]) {
+        let nextID = FocusNeighbor.nearestRemainingID(in: resumable.map(\.item.id), removing: entry.item.id)
+        let targetToken = nextID.map { "resume-\($0)" } ?? (model.billboard != nil ? "billboard" : nil)
+        lastFocusedToken = nil
+        pendingFocusToken = nil
+        library.removeFromContinueWatching(titleID: entry.item.id)
+        TopShelfRefresher.refresh()
+        if let targetToken {
+            restoreFocusSoon(targetToken)
+        }
+    }
+
+    private func removeFromMyList(_ item: MediaItem, in items: [MediaItem]) {
+        let nextID = FocusNeighbor.nearestRemainingID(in: items.map(\.id), removing: item.id)
+        let targetToken = nextID.map { "mylist-\($0)" } ?? (model.billboard != nil ? "billboard" : nil)
+        lastFocusedToken = nil
+        pendingFocusToken = nil
+        library.toggleMyList(item)
+        if let targetToken {
+            restoreFocusSoon(targetToken)
+        }
+    }
+
+    private func restoreFocusSoon(_ targetToken: String) {
+        focusRestoreTarget = targetToken
+        FocusRestorer.schedule(
+            target: targetToken,
+            focus: $focused,
+            currentTask: &focusRestoreTask,
+            isStillPending: { focusRestoreTarget == targetToken },
+            onExhausted: { if focusRestoreTarget == targetToken { focusRestoreTarget = nil } }
+        )
+    }
+
+    private func awardedMediaRow(_ title: String, entries: [AwardedMediaEntry]) -> some View {
+        ShelfRow(title, items: entries) { entry in
+            AwardedMediaCard(entry: entry, onFocus: { backdrop.focus(entry.item) })
+        }
+    }
+
+    private func sagaRow(_ title: String, sagas: [SagaCollection]) -> some View {
+        ShelfRow(title, items: sagas) { saga in
+            NavigationLink(value: saga) {
+                SagaCard(saga: saga)
+            }
+            .buttonStyle(CardFocusStyle(onFocus: { backdrop.focus(nil) }))
         }
     }
 

@@ -6,6 +6,7 @@ settings:
     DEVELOPMENT_TEAM: 6X5CP5SFAG
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
+    DEVELOPMENT_LANGUAGE: fr
 targets:
   StremioTV:
     type: application

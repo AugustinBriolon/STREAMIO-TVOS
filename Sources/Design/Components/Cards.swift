@@ -7,6 +7,10 @@ struct PosterCard: View {
     var body: some View {
         RemoteImage(url: item.posterURL, maxPixel: Theme.Card.posterSize.height * Theme.pixelScale)
             .frame(width: Theme.Card.posterSize.width, height: Theme.Card.posterSize.height)
+            .overlay {
+                RoundedRectangle(cornerRadius: Theme.Radius.card)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+            }
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
             .accessibilityLabel(item.name)
     }
@@ -36,7 +40,7 @@ struct LandscapeCard: View {
                 .foregroundStyle(Theme.Palette.textPrimary)
                 .padding(Theme.Spacing.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
+                .background(Theme.Gradients.cardScrim)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
             .accessibilityElement(children: .combine)

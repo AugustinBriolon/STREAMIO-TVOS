@@ -1,22 +1,25 @@
 import Foundation
 
 /// Storage shared by the app and the Top Shelf extension (ADR 0015). Compiled into both targets.
-enum AppGroup {
-    static let id = "group.com.h6245.vortxtv"
+public enum AppGroup {
+    public static let id = "group.com.h6245.vortxtv"
 
     /// Falls back to the standard defaults when the group is unavailable (unit tests, unsigned builds).
-    static var defaults: UserDefaults { UserDefaults(suiteName: id) ?? .standard }
+    public static var defaults: UserDefaults { UserDefaults(suiteName: id) ?? .standard }
 }
 
 /// UserDefaults keys. Library data is namespaced by profile so each profile has its own list and progress.
-enum StorageKey {
-    static let profiles = "profiles.v1"
-    static let activeProfile = "profiles.active.v1"
+public enum StorageKey {
+    public static let profiles = "profiles.v1"
+    public static let activeProfile = "profiles.active.v1"
 
-    static func myList(_ profileID: UUID) -> String { "library.\(profileID.uuidString).myList.v1" }
-    static func progress(_ profileID: UUID) -> String { "library.\(profileID.uuidString).progress.v1" }
+    public static func myList(_ profileID: UUID) -> String { "library.\(profileID.uuidString).myList.v1" }
+    public static func progress(_ profileID: UUID) -> String { "library.\(profileID.uuidString).progress.v1" }
+    public static func myListTimestamps(_ profileID: UUID) -> String { "library.\(profileID.uuidString).myListTimestamps.v1" }
+    public static func deletedMyList(_ profileID: UUID) -> String { "library.\(profileID.uuidString).deletedMyList.v1" }
+    public static func deletedProgress(_ profileID: UUID) -> String { "library.\(profileID.uuidString).deletedProgress.v1" }
 
     /// Keys used before profiles existed (ADR 0004), stored in the standard defaults.
-    static let legacyMyList = "library.myList.v1"
-    static let legacyProgress = "library.progress.v1"
+    public static let legacyMyList = "library.myList.v1"
+    public static let legacyProgress = "library.progress.v1"
 }

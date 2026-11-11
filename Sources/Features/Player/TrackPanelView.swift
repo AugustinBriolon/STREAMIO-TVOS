@@ -80,6 +80,7 @@ private struct TrackRowStyle: ButtonStyle {
 private struct TrackRowBody: View {
     let configuration: ButtonStyleConfiguration
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         configuration.label
@@ -89,7 +90,7 @@ private struct TrackRowBody: View {
             .padding(.vertical, Theme.Spacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isFocused ? Color.white : Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.button))
-            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.03, reduceMotion: false))
+            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.03, reduceMotion: reduceMotion))
             .animation(Theme.Motion.focus, value: isFocused)
             .animation(Theme.Motion.press, value: configuration.isPressed)
     }

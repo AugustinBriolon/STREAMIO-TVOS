@@ -13,11 +13,13 @@ struct PlayerView: View {
     @State private var lastInteraction = Date()
     @State private var panel: TrackColumn?
     @FocusState private var focus: PlayerFocus?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let controlsBandHeight: CGFloat = 170
     /// Strict: while the track panel or a button has focus the player must neither hide the controls
     /// nor react to remote touches.
     private var surfaceFocused: Bool { focus == .surface }
+    private var isOverlayVisible: Bool { controlsVisible || scrubber.isActive }
 
     init(session: PlaybackSession, playback: PlaybackCoordinator) {
         self.session = session
@@ -39,7 +41,8 @@ struct PlayerView: View {
             .disabled(panel != nil)
             .onMoveCommand(perform: handleMove)
             // Without this the full-screen surface also sits "below" the buttons and steals their focus.
-            .padding(.bottom, controlsVisible ? Self.controlsBandHeight : 0)
+            .padding(.bottom, isOverlayVisible ? Self.controlsBandHeight : 0)
+            .transaction { $0.animation = nil }
             .ignoresSafeArea()
 
             if engine.phase == .opening {
@@ -47,9 +50,27 @@ struct PlayerView: View {
                     ? "Chargement de la vidéo…"
                     : "Source illisible, essai de la source \(controller.candidateIndex + 1)…"))
             }
-            if controlsVisible || scrubber.isActive {
-                controls.transition(.opacity)
+
+            // Top HUD: title & metadata sliding smoothly to/from top edge
+            ZStack(alignment: .topLeading) {
+                if isOverlayVisible {
+                    topOverlay
+                        .transition(topTransition)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(isOverlayVisible)
+
+            // Bottom HUD: scrub bar, timestamp & transport buttons sliding to/from bottom edge
+            ZStack(alignment: .bottomLeading) {
+                if isOverlayVisible {
+                    bottomOverlay
+                        .transition(bottomTransition)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .allowsHitTesting(isOverlayVisible)
+
             if panel != nil {
                 TrackPanelView(engine: engine, focus: $focus)
                     .padding(.leading, Theme.Spacing.gutter)
@@ -59,13 +80,16 @@ struct PlayerView: View {
             }
         }
         .animation(Theme.Motion.panel, value: panel)
-        .animation(Theme.Motion.fade, value: controlsVisible)
+        .animation(overlayAnimation, value: isOverlayVisible)
         .onAppear {
             controller.load(session)
             focus = .surface
             ring = RemoteRingInput { radians in jog(radians) }
         }
-        .onDisappear { ring?.stop() }
+        .onDisappear {
+            ring?.stop()
+            RemoteTiltModel.shared.start()
+        }
         .onChange(of: session.id) {
             _ = scrubber.cancel()
             controller.load(session)
@@ -182,15 +206,43 @@ struct PlayerView: View {
 
     private var displayedTime: Double { scrubber.isActive ? scrubber.position : engine.currentTime }
 
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text(session.item.name).font(Theme.Typography.rowTitle)
-                if let subtitle = session.subtitle {
-                    Text(subtitle).font(Theme.Typography.caption).foregroundStyle(Theme.Palette.textSecondary)
-                }
+    // MARK: Overlay Components
+
+    @ViewBuilder
+    private var topOverlay: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+            Text(session.item.name)
+                .font(Theme.Typography.rowTitle)
+                .lineLimit(1)
+            if let subtitle = session.subtitle {
+                Text(subtitle)
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(Theme.Palette.textSecondary)
+                    .lineLimit(1)
             }
-            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Spacing.gutter)
+        .padding(.top, Theme.Spacing.xl)
+        .padding(.bottom, Theme.Spacing.xxl)
+        .background {
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.85), location: 0.0),
+                    .init(color: .black.opacity(0.40), location: 0.6),
+                    .init(color: .clear, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: [.top, .horizontal])
+            .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private var bottomOverlay: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
             ScrubBar(
                 playedFraction: engine.duration > 0 ? engine.currentTime / engine.duration : 0,
                 headFraction: engine.duration > 0 ? displayedTime / engine.duration : 0,
@@ -225,15 +277,44 @@ struct PlayerView: View {
             .focusSection()
             .opacity(scrubber.isActive ? 0 : 1)
         }
-        .foregroundStyle(Theme.Palette.textPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.Spacing.gutter)
-        .padding(.vertical, Theme.Spacing.xl)
+        .padding(.top, Theme.Spacing.xxl)
+        .padding(.bottom, Theme.Spacing.xl)
         .background {
-            LinearGradient(colors: [.black.opacity(0.7), .clear, .clear, .black.opacity(0.85)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.0),
+                    .init(color: .black.opacity(0.40), location: 0.4),
+                    .init(color: .black.opacity(0.90), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: [.bottom, .horizontal])
+            .allowsHitTesting(false)
         }
+    }
+
+    private var topTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .move(edge: .top).combined(with: .opacity)
+    }
+
+    private var bottomTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .move(edge: .bottom).combined(with: .opacity)
+    }
+
+    private var overlayAnimation: Animation {
+        if reduceMotion {
+            return Theme.Motion.fade
+        }
+        return isOverlayVisible ? Theme.Motion.overlayEntrance : Theme.Motion.overlayExit
     }
 
     private func hasSelectableTracks(_ tracks: [MediaTrack]) -> Bool {
@@ -266,17 +347,23 @@ private struct ScrubBar: View {
                 Capsule().fill(Theme.Palette.accent)
                     .frame(width: width * min(max(playedFraction, 0), 1), height: 6)
                 Circle().fill(Theme.Palette.accent)
-                    .frame(width: isScrubbing ? 26 : 16, height: isScrubbing ? 26 : 16)
-                    .offset(x: headX - (isScrubbing ? 13 : 8), y: isScrubbing ? 10 : 5)
-                if isScrubbing {
-                    previewCard
-                        .offset(x: min(max(headX - Self.previewSize.width / 2, 0), width - Self.previewSize.width),
-                                y: -30)
-                }
+                    .frame(width: 16, height: 16)
+                    .scaleEffect(isScrubbing ? 1.625 : 1.0)
+                    .offset(x: headX - 8, y: 5)
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
+            .overlay(alignment: .bottomLeading) {
+                if isScrubbing {
+                    previewCard
+                        .offset(
+                            x: min(max(headX - Self.previewSize.width / 2, 0), width - Self.previewSize.width),
+                            y: -40
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+            }
         }
-        .frame(height: isScrubbing ? Self.previewSize.height + 90 : 26)
+        .frame(height: 26)
         .animation(Theme.Motion.focus, value: isScrubbing)
     }
 

@@ -25,7 +25,7 @@ struct ShelfRow<Data: RandomAccessCollection, ID: Hashable, Card: View>: View {
                     ForEach(items, id: id) { card($0) }
                 }
                 .padding(.horizontal, Theme.Spacing.gutter)
-                .padding(.vertical, Theme.Spacing.m)
+                .padding(.vertical, Theme.Spacing.l)
             }
             .scrollIndicators(.hidden)
             .scrollClipDisabled()

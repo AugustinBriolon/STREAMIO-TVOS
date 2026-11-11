@@ -11,6 +11,7 @@ final class PlayerController {
     private(set) var candidateIndex = 0
 
     @ObservationIgnored private let playback: PlaybackCoordinator
+    @ObservationIgnored private let preferences: AppPreferences
     @ObservationIgnored private let language: String
     @ObservationIgnored private var appliedDefaultTracks = false
     @ObservationIgnored private var lastSavedAt: Double = 0
@@ -21,9 +22,10 @@ final class PlayerController {
     static let nextEpisodeLeadTime: Double = 60
     static let saveInterval: Double = 10
 
-    init(playback: PlaybackCoordinator, language: String? = nil) {
+    init(playback: PlaybackCoordinator, language: String? = nil, preferences: AppPreferences = .shared) {
         self.playback = playback
-        self.language = language ?? Self.deviceLanguage
+        self.preferences = preferences
+        self.language = language ?? preferences.preferredAudioLanguage
     }
 
     nonisolated static var deviceLanguage: String {
@@ -107,9 +109,19 @@ final class PlayerController {
     private func applyDefaultTracksIfNeeded() {
         guard !appliedDefaultTracks, !engine.audioTracks.isEmpty else { return }
         appliedDefaultTracks = true
-        let audio = TrackSelector.preferredAudio(engine.audioTracks, language: language)
+        let audioLang = preferences.preferredAudioLanguage
+        let subLang = preferences.preferredSubtitleLanguage
+        let subMode = preferences.subtitleMode
+
+        let audio = TrackSelector.preferredAudio(engine.audioTracks, language: audioLang)
         if let audio, audio.id != engine.selectedAudioID { engine.selectAudio(audio.id) }
-        let subtitle = TrackSelector.preferredSubtitle(engine.subtitleTracks, audio: audio, language: language)
+        let subtitle = TrackSelector.preferredSubtitle(
+            engine.subtitleTracks,
+            audio: audio,
+            mode: subMode,
+            language: subLang,
+            audioLanguage: audioLang
+        )
         engine.selectSubtitle(subtitle?.id ?? -1)
     }
 

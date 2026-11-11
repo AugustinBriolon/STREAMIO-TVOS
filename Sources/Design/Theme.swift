@@ -36,6 +36,51 @@ enum Theme {
         static let badge: CGFloat = 4
     }
 
+    /// Apple TV elevation and depth tokens.
+    enum Shadow {
+        /// Broad ambient diffusion representing the card/button lifting off the canvas plane toward the viewer.
+        static let ambientColor = Color.black.opacity(0.45)
+        static let ambientRadius: CGFloat = 26
+        static let ambientY: CGFloat = 12
+
+        /// Directional contact shadow anchoring the control against directional overhead living-room lighting.
+        static let contactColor = Color.black.opacity(0.32)
+        static let contactRadius: CGFloat = 8
+        static let contactY: CGFloat = 4
+
+        /// Compressed shadow geometry during remote click actuation.
+        static let pressedAmbientRadius: CGFloat = 14
+        static let pressedAmbientY: CGFloat = 6
+        static let pressedContactRadius: CGFloat = 4
+        static let pressedContactY: CGFloat = 2
+    }
+
+    /// Gradients for contrast and specular illumination.
+    enum Gradients {
+        /// Non-linear progressive scrim gradient that prevents OLED dark-room color banding.
+        static let cardScrim = LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black.opacity(0.18), location: 0.45),
+                .init(color: .black.opacity(0.55), location: 0.72),
+                .init(color: .black.opacity(0.88), location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+
+        /// Specular top-edge sheen reflecting virtual living-room lighting across focused surfaces.
+        static let specularSheen = LinearGradient(
+            stops: [
+                .init(color: Color.white.opacity(0.20), location: 0.0),
+                .init(color: Color.white.opacity(0.04), location: 0.25),
+                .init(color: Color.clear, location: 0.5)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     enum Typography {
         static let billboardTitle = Font.system(size: 64, weight: .black)
         static let pageTitle = Font.system(size: 48, weight: .bold)
@@ -53,20 +98,30 @@ enum Theme {
         static let posterSize = CGSize(width: 220, height: 330)
         static let landscapeSize = CGSize(width: 400, height: 225)
         static let episodeSize = CGSize(width: 360, height: 202)
+        static let brandHubSize = CGSize(width: 260, height: 116)
+        static let sagaSize = CGSize(width: 380, height: 214)
+        static let awardSize = CGSize(width: 320, height: 154)
     }
 
     /// Pixels per point of the current output (2 on a 4K Apple TV, 1 on 1080p).
     @MainActor static var pixelScale: CGFloat { UIScreen.main.scale }
 
-    /// Strong ease-out (starts fast, settles gently): feedback is felt at once and never overshoots.
-    /// Focus moves happen dozens of times a minute, so they stay short.
+    /// Apple TV fluid spring motion: critically damped for focus shifts (zero overshoot, velocity-preserving
+    /// across rapid remote swipes) and high-stiffness tactile spring for remote clickpad actuation.
     enum Motion {
         static let focusScale: CGFloat = 1.08
-        static let focus = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
-        static let fade = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.3)
-        static let panel = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.25)
-        /// Click feedback: the shortest animation in the app, the interface must feel like it heard the click.
-        static let press = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.12)
+        /// Critically-damped interactive spring: immediate response, zero bounce, smooth momentum handoff.
+        static let focus = Animation.spring(duration: 0.22, bounce: 0)
+        /// Tactile clickpad depression spring matching physical remote button actuation.
+        static let press = Animation.snappy(duration: 0.14, extraBounce: 0)
+        /// Content transitions and dynamic backdrop cross-fades.
+        static let fade = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.28)
+        /// Navigation rail and slide-over panels.
+        static let panel = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.22)
+        /// Transport HUD overlay entrance: smooth Apple tvOS critically-damped spring (settles cleanly into safe area).
+        static let overlayEntrance = Animation.spring(duration: 0.28, bounce: 0)
+        /// Transport HUD overlay exit: rapid dismissal (clears the picture out of the viewer's way).
+        static let overlayExit = Animation.spring(duration: 0.20, bounce: 0)
         static let pressScale: CGFloat = 0.96
 
         /// Scale of a focusable control. On tvOS only the focused element can be clicked, so the press

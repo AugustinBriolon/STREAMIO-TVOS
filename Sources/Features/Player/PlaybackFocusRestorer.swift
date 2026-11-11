@@ -24,3 +24,28 @@ extension View {
         modifier(PlaybackFocusRestorer(focus: focus, origin: origin))
     }
 }
+
+/// Shared tvOS retry scheduler for restoring focus after `.contextMenu` or `NavigationStack` transitions.
+@MainActor
+enum FocusRestorer {
+    static func schedule(
+        target: String,
+        focus: FocusState<String?>.Binding,
+        currentTask: inout Task<Void, Never>?,
+        isStillPending: @escaping @MainActor () -> Bool,
+        onExhausted: @escaping @MainActor () -> Void
+    ) {
+        currentTask?.cancel()
+        currentTask = Task { @MainActor in
+            for delayMs in [120, 200, 220, 250] {
+                try? await Task.sleep(for: .milliseconds(delayMs))
+                guard !Task.isCancelled, isStillPending() else { return }
+                focus.wrappedValue = nil
+                await Task.yield()
+                guard !Task.isCancelled, isStillPending() else { return }
+                focus.wrappedValue = target
+            }
+            onExhausted()
+        }
+    }
+}

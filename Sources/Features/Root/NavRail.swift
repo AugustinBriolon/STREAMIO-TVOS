@@ -1,108 +1,218 @@
 import SwiftUI
 
-/// Left navigation rail without any background: icons float over the content in the screen margin and
-/// their names slide in while the rail has focus. (The system sidebar of tvOS 26 draws a glass panel and a
-/// disc behind every icon and offers no way to remove them: ADR 0010.)
-///
-/// States are told apart by shape, weight and brightness, never by a box:
-/// - selected: filled icon, bold white name, red mark;
-/// - focused: white, slightly enlarged (the cursor);
-/// - other: outline icon, medium weight, dimmed.
+/// Left navigation rail designed for tvOS: compact floating icon badges that reveal titles
+/// when expanded, with native Apple TV focus mechanics, 48x48 icon-anchored highlights,
+/// and local boundary resistance.
 struct NavRail: View {
     let selected: AppTab
-    /// The Profils entry is named after the active profile.
     let profileName: String
+    let profileAvatar: ProfileAvatar?
+    let isAtRoot: (AppTab) -> Bool
     let focus: FocusState<AppTab?>.Binding
     let onSelect: (AppTab) -> Void
+    var onExitToPage: (() -> Void)? = nil
 
     private var expanded: Bool { focus.wrappedValue != nil }
+    @State private var bounceOffset: CGFloat = 0
+    @Namespace private var railNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(
+        selected: AppTab,
+        profileName: String,
+        profileAvatar: ProfileAvatar? = nil,
+        isAtRoot: @escaping (AppTab) -> Bool = { _ in true },
+        focus: FocusState<AppTab?>.Binding,
+        onSelect: @escaping (AppTab) -> Void,
+        onExitToPage: (() -> Void)? = nil
+    ) {
+        self.selected = selected
+        self.profileName = profileName
+        self.profileAvatar = profileAvatar
+        self.isAtRoot = isAtRoot
+        self.focus = focus
+        self.onSelect = onSelect
+        self.onExitToPage = onExitToPage
+    }
 
     var body: some View {
-        // The section spans the full height, so moving left from a card at any height lands here and the
-        // focus engine picks the nearest item (a column of six icons alone missed most rows).
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer(minLength: 0)
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                ForEach(AppTab.allCases, id: \.self) { tab in
-                    Button { onSelect(tab) } label: {
-                        RailLabel(tab: tab, title: tab == .profiles ? profileName : tab.title, isSelected: tab == selected, expanded: expanded)
-                    }
-                    .buttonStyle(RailItemStyle(isSelected: tab == selected))
-                    .focused(focus, equals: tab)
-                    .accessibilityLabel(tab == .profiles ? profileName : tab.title)
-                    .accessibilityAddTraits(tab == selected ? .isSelected : [])
-                }
-            }
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 12) {
+            Spacer(minLength: 32)
+
+            // Section 1: Main media categories
+            tabButton(for: .home)
+            tabButton(for: .movies)
+            tabButton(for: .series)
+            tabButton(for: .myList)
+
+            // Hairline breathing separator (constant 36pt width, never overflows)
+            Rectangle()
+                .fill(Color.white.opacity(expanded ? 0.12 : 0.06))
+                .frame(width: 36, height: 1)
+                .padding(.vertical, 4)
+                .padding(.leading, 6)
+
+            // Section 2: Utilities & Discovery
+            tabButton(for: .search)
+            tabButton(for: .settings)
+
+            // Hairline breathing separator
+            Rectangle()
+                .fill(Color.white.opacity(expanded ? 0.12 : 0.06))
+                .frame(width: 36, height: 1)
+                .padding(.vertical, 4)
+                .padding(.leading, 6)
+
+            // Section 3: Profile Identity Anchor
+            tabButton(for: .profiles)
+
+            Spacer(minLength: 32)
         }
+        .offset(y: bounceOffset)
         .frame(maxHeight: .infinity)
         .focusSection()
         .animation(Theme.Motion.panel, value: expanded)
     }
+
+    @ViewBuilder
+    private func tabButton(for tab: AppTab) -> some View {
+        let isCurrent = tab == selected
+        let atRoot = isAtRoot(tab)
+        let isRootActive = isCurrent && atRoot
+        let isSubpageActive = isCurrent && !atRoot
+
+        Button {
+            onSelect(tab)
+        } label: {
+            RailIconBadge(
+                tab: tab,
+                title: tab == .profiles ? profileName : tab.title,
+                avatar: tab == .profiles ? profileAvatar : nil,
+                isRootActive: isRootActive,
+                isSubpageActive: isSubpageActive,
+                expanded: expanded,
+                railNamespace: railNamespace
+            )
+        }
+        .buttonStyle(RailIconButtonStyle())
+        .focused(focus, equals: tab)
+        // Local Apple HIG boundary handling: clamp terminal items without global side-effects
+        .onMoveCommand { direction in
+            if direction == .down && tab == .profiles {
+                triggerBounce(offset: 4)
+            } else if direction == .up && tab == .home {
+                triggerBounce(offset: -4)
+            }
+        }
+        .accessibilityLabel(tab == .profiles ? profileName : (isSubpageActive ? "Retour à \(tab.title)" : tab.title))
+        .accessibilityAddTraits(isRootActive ? .isSelected : [])
+    }
+
+    private func triggerBounce(offset: CGFloat) {
+        guard !reduceMotion else { return }
+        bounceOffset = offset
+        withAnimation(Animation.spring(duration: 0.22, bounce: 0.28)) {
+            bounceOffset = 0
+        }
+    }
 }
 
-private struct RailLabel: View {
+// MARK: - Icon-Anchored Badge (Strict 48x48 geometry, title projected as non-intrusive overlay)
+
+private struct RailIconBadge: View {
     let tab: AppTab
     let title: String
-    let isSelected: Bool
+    let avatar: ProfileAvatar?
+    let isRootActive: Bool
+    let isSubpageActive: Bool
     let expanded: Bool
+    let railNamespace: Namespace.ID
+    @Environment(\.isFocused) private var isFocused
 
-    /// The name is an overlay: it never changes the button's size. So opening the rail animates only
-    /// opacity and offset (no layout pass per frame), and a rail item never overlaps the first card of
-    /// a row, which the focus engine would treat as a candidate for up/down moves in the content.
     var body: some View {
-        Image(systemName: tab.symbol)
-            .symbolVariant(isSelected ? .fill : .none)
-            .font(.system(size: 30, weight: isSelected ? .bold : .regular))
-            .contentTransition(.symbolEffect(.replace))
-            .frame(width: 44, height: 44)
-            .overlay(alignment: .leading) {
-                Text(title)
-                    .font(.system(size: 28, weight: isSelected ? .bold : .medium))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .offset(x: 44 + Theme.Spacing.m + (expanded ? 0 : -12))
-                    .opacity(expanded ? 1 : 0)
+        ZStack {
+            // Optical resting highlight: strictly bounded to the 48x48 icon disc
+            if isRootActive {
+                Circle()
+                    .fill(Color.white.opacity(isFocused ? 0.22 : 0.12))
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(isFocused ? 0.38 : 0.20), lineWidth: 1.2)
+                    }
+            } else if isFocused {
+                Circle()
+                    .fill(Color.white.opacity(0.18))
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.32), lineWidth: 1.2)
+                    }
             }
+
+            // Core glyph or user profile picture
+            if tab == .profiles, let avatar {
+                ProfileAvatarView(avatar: avatar, size: 30)
+            } else {
+                Image(systemName: tab.symbol)
+                    .symbolVariant(isRootActive ? .fill : .none)
+                    .font(.system(size: 24, weight: isRootActive ? .bold : .medium))
+                    .foregroundStyle(isFocused ? .white : (isRootActive ? .white : .white.opacity(0.48)))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+        }
+        .frame(width: 48, height: 48)
+        .overlay(alignment: .leading) {
+            // Projected title: never modifies the button's layout footprint
+            if expanded {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 26, weight: isRootActive ? .bold : .medium))
+                        .foregroundStyle(isFocused ? .white : (isRootActive ? .white : .white.opacity(0.60)))
+                        .lineLimit(1)
+                        .fixedSize()
+
+                    if isSubpageActive {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: 13, weight: .bold))
+                            Text("Retour")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.cyan)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.cyan.opacity(0.15)))
+                    }
+                }
+                .offset(x: 58)
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.animation(.easeOut(duration: 0.18)),
+                        removal: .opacity.animation(.easeOut(duration: 0.12))
+                    )
+                )
+            }
+        }
     }
 }
 
-/// No background of any kind.
-private struct RailItemStyle: ButtonStyle {
-    let isSelected: Bool
+// MARK: - Button Style (Centric scale, no wide background spill)
 
-    func makeBody(configuration: Configuration) -> some View {
-        RailItemBody(configuration: configuration, isSelected: isSelected)
-    }
-}
-
-private struct RailItemBody: View {
-    let configuration: ButtonStyleConfiguration
-    let isSelected: Bool
+private struct RailIconButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Brightness ladder: cursor > selected > others. Others stay clearly dimmer than the selected one.
-    private var brightness: Double {
-        if isFocused { return 1 }
-        return isSelected ? 1 : 0.42
-    }
-
-    var body: some View {
+    func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.white.opacity(brightness))
-            .shadow(color: .black.opacity(0.6), radius: 6) // legibility over bright artwork, not a background
-            .overlay(alignment: .leading) {
-                Capsule()
-                    .fill(Theme.Palette.accent)
-                    .frame(width: 5, height: 30)
-                    .scaleEffect(y: isSelected ? 1 : 0.2)
-                    .offset(x: -16)
-                    .opacity(isSelected ? 1 : 0)
-            }
-            .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: 1.1, reduceMotion: reduceMotion), anchor: .leading)
+            .scaleEffect(
+                Theme.Motion.scale(
+                    focused: isFocused,
+                    pressed: configuration.isPressed,
+                    focusScale: 1.08,
+                    reduceMotion: reduceMotion
+                ),
+                anchor: .center
+            )
             .animation(Theme.Motion.focus, value: isFocused)
             .animation(Theme.Motion.press, value: configuration.isPressed)
-            .animation(Theme.Motion.focus, value: isSelected)
     }
 }

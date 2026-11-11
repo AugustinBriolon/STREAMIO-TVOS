@@ -23,6 +23,18 @@ final class HomeViewModel {
     private(set) var top10: [MediaItem] = []
     private(set) var shelves: [Shelf] = []
 
+    // MARK: - Catégories enrichies (TMDB & Palmarès)
+    private(set) var nowPlaying: [MediaItem] = []
+    private(set) var trendingWeek: [MediaItem] = []
+    private(set) var sagas: [SagaCollection] = []
+    private(set) var awardedMovies: [AwardedMediaEntry] = []
+    private(set) var awardedSeries: [AwardedMediaEntry] = []
+
+    var moviePlatforms: [BrandHub] { BrandHub.moviePlatforms }
+    var movieStudios: [BrandHub] { BrandHub.movieStudios }
+    var seriesPlatforms: [BrandHub] { BrandHub.seriesPlatforms }
+    var seriesNetworks: [BrandHub] { BrandHub.seriesNetworks }
+
     @ObservationIgnored private let service: StremioProviding
     @ObservationIgnored private var loadTask: Task<Void, Never>?
 
@@ -78,8 +90,65 @@ final class HomeViewModel {
             .map { Shelf(title: $0.0.title, items: $0.1) }
         shelves = rows
         billboard = Self.pickBillboard(from: top.isEmpty ? rows.first?.items ?? [] : top)
+        enrichBillboardIfNeeded()
+        if scope == .movie || scope == nil {
+            awardedMovies = AwardsService.shared.awardedShowcase(for: .movie, limit: 25)
+        }
+        if scope == .series || scope == nil {
+            awardedSeries = AwardsService.shared.awardedShowcase(for: .series, limit: 25)
+        }
         state = .loaded
         prefetchArtwork(top10: top10, shelves: shelves)
+        await loadEnrichedDiscovery()
+    }
+
+    private func loadEnrichedDiscovery() async {
+        let lang = AppPreferences.shared.metadataLanguage
+
+        // 1. Tendances de la semaine
+        let trendingType = scope ?? .movie
+        let trending = await service.fetchTrending(type: trendingType, period: "week", language: lang)
+        if !trending.isEmpty { self.trendingWeek = trending }
+
+        // 2. Pour les films : Actuellement au cinéma
+        if scope == .movie || scope == nil {
+            let cinema = await service.fetchNowPlaying(language: lang, region: "FR")
+            if !cinema.isEmpty { self.nowPlaying = cinema }
+        }
+
+        // 3. Sagas incontournables (Films ou Accueil)
+        if scope == .movie || scope == nil {
+            let sagaIDs = SagaCollection.curatedCollectionIDs
+            let loadedSagas = await withTaskGroup(of: (Int, SagaCollection?).self) { group in
+                for (index, id) in sagaIDs.enumerated() {
+                    group.addTask { [service] in
+                        let collection = await service.fetchCollection(collectionID: id, language: lang)
+                        return (index, collection)
+                    }
+                }
+                var collected: [Int: SagaCollection] = [:]
+                for await (index, col) in group {
+                    if let col { collected[index] = col }
+                }
+                return sagaIDs.indices.compactMap { collected[$0] }
+            }
+            if !loadedSagas.isEmpty { self.sagas = loadedSagas }
+        }
+    }
+
+    private func enrichBillboardIfNeeded() {
+        guard let picked = billboard else { return }
+        Task { [weak self, service] in
+            let prefs = AppPreferences.shared
+            if let detail = try? await service.fetchDetails(
+                type: picked.type,
+                id: picked.id,
+                language: prefs.metadataLanguage,
+                tmdbApiKey: prefs.effectiveTMDBKey
+            ) {
+                self?.billboard = detail.summary
+            }
+        }
     }
 
     /// Decodes the first posters of every row (and the billboard backdrop) before the user scrolls there.

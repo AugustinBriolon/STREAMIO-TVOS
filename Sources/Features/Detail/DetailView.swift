@@ -14,7 +14,9 @@ struct DetailView: View {
         _model = State(initialValue: DetailViewModel(item: item))
     }
 
-    private var resume: PlaybackProgress? { library.resumeEntry(forTitle: model.item.id) }
+    private var resume: PlaybackProgress? {
+        library.resumeEntry(forTitle: model.summary.id, aliases: model.idAliases)
+    }
 
     var body: some View {
         ScrollView(.vertical) {
@@ -24,27 +26,43 @@ struct DetailView: View {
                 case .failed(let message):
                     StateView(kind: .error(message) { Task { await model.loadIfNeeded(resumeSeason: resume?.video?.season) } })
                         .frame(height: 400)
-                case .loaded:
-                    if model.item.type == .series { episodesSection.transition(.opacity) }
-                    if !model.similar.isEmpty {
-                        ShelfRow("Titres similaires", items: model.similar) { item in
-                            NavigationLink(value: item) { PosterCard(item: item) }
-                                .buttonStyle(CardFocusStyle())
-                        }
                         .transition(.opacity)
+                case .loaded:
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                        if model.item.type == .series { episodesSection }
+                        if !model.castMembers.isEmpty {
+                            ShelfRow("Distribution", items: model.castMembers) { member in
+                                NavigationLink(value: member) {
+                                    CastCard(member: member)
+                                }
+                                .buttonStyle(PlainFocusStyle())
+                            }
+                        }
+                        if !model.similar.isEmpty {
+                            ShelfRow("Titres similaires", items: model.similar) { item in
+                                NavigationLink(value: item) { PosterCard(item: item) }
+                                    .buttonStyle(CardFocusStyle())
+                            }
+                        }
+                        if !model.distinctions.isEmpty { awardsSection }
                     }
+                    .transition(.opacity)
                 case .idle, .loading:
-                    ProgressView().frame(maxWidth: .infinity)
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 200)
+                        .transition(.opacity)
                 }
             }
-            // Episodes and similar titles arrive after the hero: fade them in rather than pop.
-            .animation(Theme.Motion.fade, value: model.state)
-            .animation(Theme.Motion.fade, value: model.similar.isEmpty)
             .padding(.bottom, Theme.Spacing.xxl)
         }
+        .animation(Theme.Motion.fade, value: model.state)
         .scrollIndicators(.hidden)
         .ignoresSafeArea(edges: .top)
         .background(Theme.Palette.canvas)
+        .navigationDestination(for: CastMember.self) { member in
+            PersonDetailView(member: member)
+        }
         .task { await model.loadIfNeeded(resumeSeason: resume?.video?.season) }
         .restoresFocusAfterPlayback($focused, to: playOrigin)
         .sheet(item: $sourcePicker, onDismiss: playPickedStream) { target in
@@ -62,6 +80,9 @@ struct DetailView: View {
             Spacer(minLength: 0)
             LogoTitle(name: item.name, logoURL: item.logoURL)
             MetaLine(rating: item.displayRating, components: item.metaComponents)
+            if !model.distinctions.isEmpty {
+                heroDistinctionStrip
+            }
             if let description = item.description, !description.isEmpty {
                 Text(description)
                     .font(Theme.Typography.body)
@@ -110,18 +131,60 @@ struct DetailView: View {
             .buttonStyle(PillButtonStyle(kind: .primary))
             .focused($focused, equals: "play")
 
-            MyListButton(isInMyList: library.isInMyList(model.item.id)) {
-                library.toggleMyList(model.summary)
+            MyListButton(isInMyList: library.isInMyList(anyOf: model.idAliases)) {
+                library.toggleMyList(model.summary, aliases: model.idAliases)
             }
 
             if model.item.type == .movie {
                 Button("Choisir une source", systemImage: "list.bullet") {
-                    sourcePicker = SourcePickerTarget(video: nil, videoID: model.item.id, title: model.summary.name)
+                    sourcePicker = SourcePickerTarget(video: nil, videoID: model.summary.id, title: model.summary.name)
                 }
                 .buttonStyle(PillButtonStyle())
             }
         }
         .padding(.top, Theme.Spacing.s)
+    }
+
+    // MARK: Distinctions
+
+    @ViewBuilder
+    private var heroDistinctionStrip: some View {
+        if let primary = model.distinctions.first {
+            let extra = model.distinctions.count - 1
+            HStack(spacing: Theme.Spacing.xs) {
+                Circle()
+                    .fill(primary.won ? Theme.Palette.rating : Theme.Palette.surfaceRaised)
+                    .frame(width: 22, height: 22)
+                    .overlay {
+                        Image(systemName: primary.won ? "trophy.fill" : "sparkles")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+
+                HStack(spacing: 6) {
+                    Text(primary.won
+                         ? "\(primary.shortCeremonyLabel) \(String(primary.year))"
+                         : "Nominé · \(primary.shortCeremonyLabel) \(String(primary.year))")
+                        .foregroundStyle(Theme.Palette.textPrimary)
+
+                    Text("· \(primary.category)")
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                        .lineLimit(1)
+
+                    if extra > 0 {
+                        Text("· +\(extra)")
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                    }
+                }
+                .font(Theme.Typography.meta)
+            }
+        }
+    }
+
+    private var awardsSection: some View {
+        ShelfRow("Distinctions", items: model.distinctions) { distinction in
+            AwardDistinctionCard(distinction: distinction)
+        }
     }
 
     // MARK: Episodes
@@ -204,4 +267,51 @@ struct SourcePickerTarget: Identifiable {
     let videoID: String
     let title: String
     var id: String { videoID }
+}
+
+private struct AwardDistinctionCard: View {
+    let distinction: AwardDistinction
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            HStack(spacing: Theme.Spacing.xs) {
+                Circle()
+                    .fill(distinction.won ? Theme.Palette.rating : Theme.Palette.surfaceRaised)
+                    .frame(width: 20, height: 20)
+                    .overlay {
+                        Image(systemName: distinction.won ? "trophy.fill" : "sparkles")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+
+                Text(distinction.won
+                     ? "\(distinction.shortCeremonyLabel) \(String(distinction.year))"
+                     : "Nominé · \(distinction.shortCeremonyLabel) \(String(distinction.year))")
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(isFocused ? Theme.Palette.textPrimary : Theme.Palette.textSecondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+
+            Text(distinction.category)
+                .font(Theme.Typography.cardTitle)
+                .foregroundStyle(Theme.Palette.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.s)
+        .frame(width: 310, height: 84, alignment: .leading)
+        .background(isFocused ? Theme.Palette.surfaceRaised : Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Theme.Palette.focusRing, lineWidth: isFocused ? 2 : 0)
+        }
+        .scaleEffect(isFocused ? 1.04 : 1.0)
+        .animation(Theme.Motion.focus, value: isFocused)
+        .focusable()
+        .focused($isFocused)
+    }
 }

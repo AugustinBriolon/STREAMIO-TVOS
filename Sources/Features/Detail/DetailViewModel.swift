@@ -8,6 +8,7 @@ final class DetailViewModel {
     private(set) var detail: MediaDetail?
     private(set) var state: LoadState = .idle
     private(set) var similar: [MediaItem] = []
+    private(set) var distinctions: [AwardDistinction] = []
     var selectedSeason: Int?
 
     @ObservationIgnored private let service: StremioProviding
@@ -16,11 +17,17 @@ final class DetailViewModel {
     init(item: MediaItem, service: StremioProviding = StremioService()) {
         self.item = item
         self.service = service
+        self.distinctions = AwardsService.shared.distinctions(for: item)
     }
 
     /// Detail summary once loaded, catalog item before.
     var summary: MediaItem { detail?.summary ?? item }
     var episodes: [VideoItem] { detail?.videos ?? [] }
+
+    /// Tous les identifiants connus pour ce titre (pré-résolution TMDB + canonique IMDb) pour Ma liste / reprise / distinctions.
+    var idAliases: [String] {
+        Array(Set([item.id, summary.id]))
+    }
 
     /// Regular seasons ascending, specials (0) last.
     var seasons: [Int] {
@@ -29,6 +36,10 @@ final class DetailViewModel {
 
     var episodesInSelectedSeason: [VideoItem] {
         episodes.filter { $0.season == selectedSeason }.sorted { $0.episodeNumber < $1.episodeNumber }
+    }
+
+    var castMembers: [CastMember] {
+        detail?.castMembers ?? []
     }
 
     var castLine: String? {
@@ -55,7 +66,19 @@ final class DetailViewModel {
     private func load(resumeSeason: Int?) async {
         state = .loading
         do {
-            detail = try await service.fetchDetails(type: item.type, id: item.id)
+            let prefs = AppPreferences.shared
+            detail = try await service.fetchDetails(
+                type: item.type,
+                id: item.id,
+                language: prefs.metadataLanguage,
+                tmdbApiKey: prefs.effectiveTMDBKey
+            )
+            if let loadedSummary = detail?.summary {
+                distinctions = AwardsService.shared.distinctions(
+                    for: loadedSummary,
+                    alternateIDs: [item.id]
+                )
+            }
             selectedSeason = resumeSeason.flatMap { seasons.contains($0) ? $0 : nil } ?? seasons.first
             state = .loaded
         } catch {

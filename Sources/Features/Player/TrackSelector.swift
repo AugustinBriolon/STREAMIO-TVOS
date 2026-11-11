@@ -14,13 +14,30 @@ enum TrackSelector {
         tracks.filter { $0.id >= 0 }.max { audioScore($0, language) < audioScore($1, language) }
     }
 
-    static func preferredSubtitle(_ tracks: [MediaTrack], audio: MediaTrack?, language: String = "fr") -> MediaTrack? {
+    static func preferredSubtitle(
+        _ tracks: [MediaTrack],
+        audio: MediaTrack?,
+        mode: SubtitlePreferenceMode = .auto,
+        language: String = "fr",
+        audioLanguage: String = "fr"
+    ) -> MediaTrack? {
+        guard mode != .off else { return nil }
+
         let candidates = tracks.filter { $0.id >= 0 && matchesLanguage($0.name, language) && !isExtra($0.name) }
-        let audioInLanguage = audio.map { matchesLanguage($0.name, language) } ?? false
-        if audioInLanguage {
+        guard !candidates.isEmpty else { return nil }
+
+        if mode == .alwaysOn {
+            let full = candidates.filter { !isForced($0.name) }
+            return (full.isEmpty ? candidates : full).max { subtitleScore($0) < subtitleScore($1) }
+        }
+
+        // Mode .auto : sous-titres forcés si audio dans la langue préférée, sous-titres complets sinon.
+        let audioInPreferred = audio.map { matchesLanguage($0.name, audioLanguage) } ?? false
+        if audioInPreferred {
             return candidates.filter { isForced($0.name) }.max { subtitleScore($0) < subtitleScore($1) }
         }
-        return candidates.filter { !isForced($0.name) }.max { subtitleScore($0) < subtitleScore($1) }
+        let full = candidates.filter { !isForced($0.name) }
+        return (full.isEmpty ? candidates : full).max { subtitleScore($0) < subtitleScore($1) }
     }
 
     // MARK: Scoring
@@ -52,6 +69,11 @@ enum TrackSelector {
     private static let languageKeywords: [String: String] = [
         "fr": #"\bfr(e|a)?\b|french|fran[cç]ais|\bVF[FQI2]?\b|truefrench"#,
         "en": #"\ben(g)?\b|english|anglais|\bVO\b"#,
+        "es": #"\bes(p)?\b|spanish|español|castellano"#,
+        "de": #"\bde(u|ger)?\b|german|deutsch"#,
+        "it": #"\bit(a)?\b|italian|italiano"#,
+        "pt": #"\bpt|por(t)?\b|portuguese|portugu[eê]s"#,
+        "ja": #"\bja(p)?\b|japanese|japonais"#,
     ]
 
     static func matchesLanguage(_ name: String, _ language: String) -> Bool {
