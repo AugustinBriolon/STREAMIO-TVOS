@@ -4,7 +4,7 @@
  * account API rejects any token that has a role.
  */
 
-import { json, sha256, hashPassword, signToken, readToken, parsePlan, effectivePlan, limitsFor, inferSessionKind, MIN_PASSWORD_LENGTH } from './shared.ts';
+import { json, sha256, hashPassword, signToken, readToken, parsePlan, effectivePlan, limitsFor, inferSessionKind, cleanLabel, MIN_PASSWORD_LENGTH } from './shared.ts';
 import type { Env } from './shared.ts';
 
 const ADMIN_TOKEN_TTL_S = 8 * 60 * 60;
@@ -70,11 +70,13 @@ function audit(action: string, accountId: string, detail: Record<string, unknown
 }
 
 function mapDevice(d: any, revoked = false) {
+  const name = cleanLabel(d.display_name || d.device_name, 'Appareil');
+  const model = d.device_model ? cleanLabel(d.device_model, '') || null : null;
   return {
     id: d.id,
-    name: d.display_name || d.device_name,
-    model: d.device_model || null,
-    kind: inferSessionKind(d.device_kind, d.display_name || d.device_name, d.device_model),
+    name,
+    model,
+    kind: inferSessionKind(d.device_kind, name, model),
     createdAtMs: d.created_at_ms,
     lastSeenAtMs: d.last_seen_at_ms,
     ...(revoked ? { revokedAtMs: d.revoked_at_ms } : {}),

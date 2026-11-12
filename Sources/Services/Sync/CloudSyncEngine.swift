@@ -436,8 +436,8 @@ public final class CloudSyncEngine {
 
     private static func applyDeviceHeaders(_ request: inout URLRequest) {
         let device = DeviceIdentity.current
-        request.setValue(device.name, forHTTPHeaderField: "X-Device-Name")
-        request.setValue(device.model, forHTTPHeaderField: "X-Device-Model")
+        request.setValue(device.headerName, forHTTPHeaderField: "X-Device-Name")
+        request.setValue(device.headerModel, forHTTPHeaderField: "X-Device-Model")
         request.setValue("tv", forHTTPHeaderField: "X-Client-Kind")
     }
 

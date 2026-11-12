@@ -15,6 +15,7 @@ import {
   limitsFor,
   effectivePlan,
   inferSessionKind,
+  cleanLabel,
   MIN_PASSWORD_LENGTH,
 } from './shared.ts';
 import type { Env, LogePlan, PlanLimits, SessionKind } from './shared.ts';
@@ -55,11 +56,6 @@ async function authenticate(token: string, env: Env): Promise<TokenClaims | null
     await env.DB.prepare('UPDATE sessions SET last_seen_at_ms = ? WHERE id = ?').bind(now, claims.sessionId).run();
   }
   return claims;
-}
-
-function cleanLabel(value: unknown, fallback: string): string {
-  const text = typeof value === 'string' ? value.trim().slice(0, 60) : '';
-  return text || fallback;
 }
 
 function rankPlan(plan: LogePlan): number {
@@ -1100,20 +1096,39 @@ export default {
         `SELECT id, device_name, device_model, device_kind, display_name, created_at_ms, last_seen_at_ms
          FROM sessions WHERE account_id = ? AND revoked_at_ms IS NULL ORDER BY last_seen_at_ms DESC`
       ).bind(session.accountId).all();
-      return json({
-        plan,
-        limits,
-        devices: rows.results.map((r: any) => ({
+      const devices = rows.results.map((r: any) => {
+        const rawName = cleanLabel(r.device_name, 'Appareil');
+        const displayName = r.display_name ? cleanLabel(r.display_name, '') : null;
+        const model = r.device_model ? cleanLabel(r.device_model, '') || null : null;
+        // Heal rows corrupted by UTF-8 device headers misread as Latin-1.
+        if (
+          (r.device_model && model && model !== r.device_model) ||
+          (r.device_name && rawName !== r.device_name) ||
+          (r.display_name && displayName && displayName !== r.display_name)
+        ) {
+          void env.DB.prepare(
+            `UPDATE sessions
+             SET device_name = ?, display_name = CASE WHEN ? IS NOT NULL THEN ? ELSE display_name END,
+                 device_model = CASE WHEN ? IS NOT NULL THEN ? ELSE device_model END
+             WHERE id = ?`
+          ).bind(rawName, displayName, displayName, model, model, r.id).run();
+        }
+        return {
           id: r.id,
-          name: r.display_name || r.device_name,
-          rawName: r.device_name,
-          displayName: r.display_name || null,
-          model: r.device_model || null,
-          kind: inferSessionKind(r.device_kind, r.display_name || r.device_name, r.device_model),
+          name: displayName || rawName,
+          rawName,
+          displayName,
+          model,
+          kind: inferSessionKind(r.device_kind, displayName || rawName, model),
           createdAtMs: r.created_at_ms,
           lastSeenAtMs: r.last_seen_at_ms,
           isCurrent: !!currentSessionId && r.id === currentSessionId,
-        })),
+        };
+      });
+      return json({
+        plan,
+        limits,
+        devices,
         ...(upgraded ? { token: upgraded.token } : {}),
       });
     }

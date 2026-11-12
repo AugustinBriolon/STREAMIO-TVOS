@@ -9,6 +9,11 @@ struct DeviceIdentityTests {
         #expect(DeviceIdentity.modelName(forIdentifier: "AppleTV99,9") == "Apple TV")
     }
 
+    @Test func percentEncodesAccentsForHTTPHeaders() {
+        #expect(DeviceIdentity.headerValue("Apple TV 4K (3e génération)") == "Apple TV 4K (3e g%C3%A9n%C3%A9ration)")
+        #expect(DeviceIdentity.headerValue("Séjour") == "S%C3%A9jour")
+    }
+
     @Test func decodesTheAccountDeviceList() throws {
         let json = Data(#"{"devices":[{"id":"s1","name":"Séjour","model":"Apple TV 4K (3e génération)","createdAtMs":1,"lastSeenAtMs":1700000000000,"isCurrent":true},{"id":"s2","name":"Navigateur web","model":null,"createdAtMs":1,"lastSeenAtMs":null,"isCurrent":false}]}"#.utf8)
         struct Payload: Decodable { let devices: [DeviceSession] }

@@ -12,6 +12,10 @@ public struct DeviceIdentity: Sendable, Equatable {
         DeviceIdentity(name: UIDevice.current.name, model: modelName(forIdentifier: hardwareIdentifier))
     }
 
+    /// Values safe for HTTP headers (Latin-1). Accents are percent-encoded UTF-8.
+    public var headerName: String { Self.headerValue(name) }
+    public var headerModel: String { Self.headerValue(model) }
+
     /// "AppleTV14,1" and the like.
     static var hardwareIdentifier: String {
         var info = utsname()
@@ -31,6 +35,13 @@ public struct DeviceIdentity: Sendable, Equatable {
         case "x86_64", "arm64": "Simulateur"
         default: identifier.hasPrefix("AppleTV") ? "Apple TV" : identifier
         }
+    }
+
+    /// Percent-encode non-ASCII so Worker headers don't turn "é" into mojibake.
+    static func headerValue(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: " -._~()'/")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 }
 
@@ -178,8 +189,8 @@ public final class AuthService {
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let identity = DeviceIdentity.current
-        req.setValue(identity.name, forHTTPHeaderField: "X-Device-Name")
-        req.setValue(identity.model, forHTTPHeaderField: "X-Device-Model")
+        req.setValue(identity.headerName, forHTTPHeaderField: "X-Device-Name")
+        req.setValue(identity.headerModel, forHTTPHeaderField: "X-Device-Model")
         req.setValue("tv", forHTTPHeaderField: "X-Client-Kind")
         guard let (data, response) = try? await URLSession.shared.data(for: req),
               let status = (response as? HTTPURLResponse)?.statusCode else { return }

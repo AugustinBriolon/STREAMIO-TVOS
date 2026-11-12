@@ -113,3 +113,40 @@ export function effectivePlan(plan: unknown, expiresAtMs: unknown, now = Date.no
   const expired = typeof expiresAtMs === 'number' && expiresAtMs > 0 && expiresAtMs < now;
   return expired ? 'free' : parsePlan(plan);
 }
+
+/**
+ * HTTP headers are Latin-1 byte strings. A UTF-8 "é" (C3 A9) arrives as "Ã©".
+ * Clients may also percent-encode UTF-8 (`%C3%A9`) so accents survive the hop.
+ */
+function repairUtf8Mojibake(text: string): string {
+  let out = text
+    .replace(/g\uFFFDn\uFFFDration/gi, 'génération')
+    .replace(/G\uFFFDn\uFFFDration/gi, 'Génération')
+    .replace(/S\uFFFDjour/g, 'Séjour')
+    .replace(/s\uFFFDjour/g, 'séjour');
+  if (!/[ÃÂâðÅ]/.test(out)) return out;
+  try {
+    const bytes = Uint8Array.from(out, (ch) => ch.charCodeAt(0) & 0xff);
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return out
+      .replace(/gÃ©nÃ©ration/g, 'génération')
+      .replace(/GÃ©nÃ©ration/g, 'Génération')
+      .replace(/SÃ©jour/g, 'Séjour');
+  }
+}
+
+/** Trims, decodes header-safe encoding, repairs mojibake, and caps length. */
+export function cleanLabel(value: unknown, fallback = ''): string {
+  let text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return fallback;
+  if (/%[0-9A-Fa-f]{2}/.test(text)) {
+    try {
+      text = decodeURIComponent(text.replace(/\+/g, '%20'));
+    } catch {
+      /* keep raw */
+    }
+  }
+  text = repairUtf8Mojibake(text).trim();
+  return text.slice(0, 60) || fallback;
+}

@@ -12,6 +12,7 @@ import worker from '../src/index.ts';
 import { sanitizePairCode, renderWebPortal } from '../src/pages/web-portal.ts';
 import { renderAdminPortal } from '../src/pages/admin-portal.ts';
 import { resetAdminLoginGate } from '../src/admin.ts';
+import { cleanLabel } from '../src/shared.ts';
 
 const SCHEMA = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
 const ADMIN_PASSWORD = 'test-admin-password';
@@ -224,4 +225,11 @@ test('page scripts are valid JavaScript', () => {
     const source = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
     assert.doesNotThrow(() => new Script(source));
   }
+});
+
+test('cleanLabel repairs UTF-8 device headers mangled as Latin-1', () => {
+  assert.equal(cleanLabel('Apple TV 4K (3e gÃ©nÃ©ration)'), 'Apple TV 4K (3e génération)');
+  assert.equal(cleanLabel('Apple TV 4K (3e g%C3%A9n%C3%A9ration)'), 'Apple TV 4K (3e génération)');
+  assert.equal(cleanLabel('S%C3%A9jour'), 'Séjour');
+  assert.equal(cleanLabel('Apple TV 4K (3e g\uFFFDn\uFFFDration)'), 'Apple TV 4K (3e génération)');
 });
