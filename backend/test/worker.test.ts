@@ -11,6 +11,7 @@ import { Script } from 'node:vm';
 import worker from '../src/index.ts';
 import { sanitizePairCode, renderWebPortal } from '../src/pages/web-portal.ts';
 import { renderAdminPortal } from '../src/pages/admin-portal.ts';
+import { resetAdminLoginGate } from '../src/admin.ts';
 
 const SCHEMA = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
 const ADMIN_PASSWORD = 'test-admin-password';
@@ -31,11 +32,13 @@ function createD1(): any {
 let env: any;
 beforeEach(() => {
   env = { DB: createD1(), JWT_SECRET: 'test-secret', ADMIN_PASSWORD };
+  resetAdminLoginGate();
 });
 
-async function call(path: string, options: { method?: string; token?: string; body?: unknown } = {}) {
+async function call(path: string, options: { method?: string; token?: string; body?: unknown; ip?: string } = {}) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.ip) headers['CF-Connecting-IP'] = options.ip;
   const res = await worker.fetch(
     new Request(`https://loge.test${path}`, {
       method: options.method || (options.body ? 'POST' : 'GET'),
@@ -63,6 +66,38 @@ test('admin login rejects a wrong password and accepts the configured one', asyn
   assert.equal(ok.status, 200);
   assert.ok(ok.data.token);
   assert.ok(ok.data.expiresAtMs > Date.now());
+});
+
+test('admin login locks after repeated failures', async () => {
+  const ip = '203.0.113.9';
+  for (let i = 0; i < 5; i++) {
+    assert.equal((await call('/api/admin/login', { body: { password: 'nope' }, ip })).status, i === 4 ? 429 : 401);
+  }
+  const locked = await call('/api/admin/login', { body: { password: ADMIN_PASSWORD }, ip });
+  assert.equal(locked.status, 429);
+  assert.ok(locked.data.retryAfterS > 0);
+  // Another IP is unaffected.
+  assert.equal((await call('/api/admin/login', { body: { password: ADMIN_PASSWORD }, ip: '198.51.100.2' })).status, 200);
+});
+
+test('admin detail shows TV quota and recently revoked overflow sessions', async () => {
+  const user = await register();
+  const admin = await adminToken();
+  await call('/api/auth/login', {
+    body: { email: 'ana@example.com', password: 'secret123', clientKind: 'tv', deviceName: 'Salon' },
+  });
+  await call('/api/auth/login', {
+    body: { email: 'ana@example.com', password: 'secret123', clientKind: 'tv', deviceName: 'Chambre' },
+  });
+
+  const detail = await call(`/api/admin/account?id=${user.accountId}`, { token: admin });
+  assert.equal(detail.status, 200);
+  assert.equal(detail.data.plan, 'free');
+  assert.equal(detail.data.limits.maxTVSessions, 1);
+  assert.equal(detail.data.usage.tv, 1);
+  assert.equal(detail.data.devices.filter((d: any) => d.kind === 'tv').length, 1);
+  assert.equal(detail.data.devices[0].name, 'Chambre');
+  assert.ok(detail.data.recentlyRevoked.some((d: any) => d.name === 'Salon'));
 });
 
 test('admin API is disabled when ADMIN_PASSWORD is not set', async () => {

@@ -35,9 +35,29 @@ const styles = String.raw`
 .kv dd { min-width: 0; overflow-wrap: anywhere; }
 .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { padding: 4px 10px; border-radius: 999px; background: rgb(255 255 255 / 0.07); font-size: 13px; }
-.drawer .list { background: rgb(255 255 255 / 0.03); }
-.drawer .card { background: rgb(255 255 255 / 0.03); padding: 16px; }
+.chip { padding: 6px 12px; border-radius: 999px; background: rgb(255 255 255 / 0.1); font-size: 14px; font-weight: 500; color: var(--text); }
+.drawer { overscroll-behavior: contain; }
+.drawer .sheet-body { gap: 28px; padding: 8px 20px 28px; }
+.drawer .kv { gap: 12px 20px; font-size: 15px; }
+.drawer .kv dt { color: var(--text-2); font-weight: 500; }
+.drawer .kv dd { color: var(--text); font-weight: 500; }
+.drawer .list { background: var(--panel-raised); border: 1px solid var(--line-strong); border-radius: var(--r-md); }
+.drawer .list .row { padding: 14px 14px; gap: 12px; align-items: flex-start; }
+.drawer .list .row + .row { box-shadow: 0 -1px 0 var(--line-strong); }
+.drawer .row-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.drawer .row-sub { color: var(--text-2); white-space: normal; overflow: visible; text-overflow: unset; line-height: 1.45; }
+.drawer .glyph { background: rgb(255 255 255 / 0.1); color: var(--text); }
+.drawer .card { background: var(--panel-raised); border: 1px solid var(--line-strong); padding: 18px; border-radius: var(--r-md); }
+.drawer .quota { display: grid; gap: 14px; padding: 16px; border-radius: var(--r-md); background: var(--panel-raised); border: 1px solid var(--line-strong); }
+.drawer .quota-note { font-size: 14px; line-height: 1.45; color: var(--text-2); }
+.drawer .quota-note[data-tone="warn"] { color: #f0d78c; }
+.drawer .kind { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; margin-left: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; background: rgb(255 255 255 / 0.12); color: var(--text); vertical-align: middle; }
+.drawer .addon-url { padding: 10px 12px; font-size: 13px; line-height: 1.4; color: var(--text-2); border-radius: 8px; background: rgb(0 0 0 / 0.25); overflow-wrap: anywhere; }
+.drawer .addon-url + .addon-url { margin-top: 8px; }
+.drawer .revoked .row-title { color: var(--text-2); }
+@media (min-width: 640px) {
+  dialog.sheet.drawer { width: min(560px, 100%); }
+}
 `;
 
 const body = `
@@ -166,44 +186,69 @@ function openAccount(id) {
 }
 
 function dateInputValue(ms) { return ms ? new Date(ms).toISOString().slice(0, 10) : ''; }
+function absoluteTime(ms) {
+  if (!ms) return '—';
+  try { return new Date(ms).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); }
+  catch (_) { return '—'; }
+}
+function kindLabel(kind) { return kind === 'browser' ? 'Navigateur' : 'Apple TV'; }
 
 function renderDetail() {
   var d = state.detail;
+  var limits = d.limits || {};
+  var usage = d.usage || { profiles: d.profiles.length, addons: d.addons.length, tv: 0, browser: 0 };
+  var tvCap = !!limits.maxTVSessions && usage.tv >= limits.maxTVSessions;
   $('#drawer-title').textContent = d.email;
   var planOptions = ['free', 'pro', 'ultra'].map(function (p) {
     return '<label><input type="radio" name="plan" value="' + p + '"' + (d.plan === p ? ' checked' : '') + '>' + { free: 'Free', pro: 'Pro', ultra: 'Ultra' }[p] + '</label>';
   }).join('');
   var devices = d.devices.length ? d.devices.map(function (dev) {
-    return '<div class="row"><span class="glyph">' + icon(dev.kind === 'browser' ? 'browser' : 'tv') + '</span><div class="row-main"><div class="row-title">' + esc(dev.name) + '</div>' +
-      '<div class="row-sub">' + esc([dev.model, 'actif ' + relativeTime(dev.lastSeenAtMs)].filter(Boolean).join(' · ')) + '</div></div>' +
+    return '<div class="row"><span class="glyph">' + icon(dev.kind === 'browser' ? 'browser' : 'tv') + '</span><div class="row-main"><div class="row-title">' + esc(dev.name) + '<span class="kind">' + kindLabel(dev.kind) + '</span></div>' +
+      '<div class="row-sub">' + esc(dev.model || 'Modèle inconnu') + '<br>Vu ' + relativeTime(dev.lastSeenAtMs) + ' · ' + absoluteTime(dev.lastSeenAtMs) + '</div></div>' +
       '<button class="btn btn-sm btn-quiet" data-revoke="' + esc(dev.id) + '">Déconnecter</button></div>';
   }).join('') : '<p class="empty">Aucun appareil connecté.</p>';
-  var profiles = d.profiles.length ? d.profiles.map(function (p) { return '<span class="chip">' + esc(p.name) + '</span>'; }).join('') : '<span class="faint">Aucun profil</span>';
-  var addons = d.addons.length ? d.addons.map(function (u) { return '<div class="row-sub mono" style="white-space:normal;overflow-wrap:anywhere">' + esc(u) + '</div>'; }).join('') : '<span class="faint">Aucune extension</span>';
+  var revoked = (d.recentlyRevoked || []).map(function (dev) {
+    return '<div class="row"><span class="glyph">' + icon(dev.kind === 'browser' ? 'browser' : 'tv') + '</span><div class="row-main"><div class="row-title">' + esc(dev.name) + '<span class="kind">' + kindLabel(dev.kind) + '</span></div>' +
+      '<div class="row-sub">Déconnecté ' + relativeTime(dev.revokedAtMs) + ' · ' + absoluteTime(dev.revokedAtMs) + '</div></div></div>';
+  }).join('');
+  var profiles = d.profiles.length ? d.profiles.map(function (p) { return '<span class="chip">' + esc(p.name) + '</span>'; }).join('') : '<span class="muted">Aucun profil</span>';
+  var addons = d.addons.length ? d.addons.map(function (u) { return '<div class="addon-url mono">' + esc(u) + '</div>'; }).join('') : '<span class="muted">Aucune extension</span>';
+  var quotaNote = tvCap
+    ? 'Limite Apple TV atteinte. Sur ' + (d.plan || 'free').toUpperCase() + ', une nouvelle connexion TV déconnecte automatiquement la précédente — d’où une seule TV visible.'
+    : 'Les sessions actives comptent dans la formule. Les appareils récemment évincés apparaissent ci-dessous s’il y en a.';
 
   $('#drawer-body').innerHTML =
     '<dl class="kv"><dt>Foyer</dt><dd>' + esc(d.nickname || '—') + '</dd><dt>Créé le</dt><dd>' + esc(d.createdAt || '—') + '</dd>' +
     '<dt>Identifiant</dt><dd class="mono">' + esc(d.id) + '</dd></dl>' +
 
+    '<div><h3 class="title-md section-title">Profils</h3><div class="chips">' + profiles + '</div></div>' +
+
+    '<div class="quota">' +
+      meter('Apple TV', usage.tv, limits.maxTVSessions || 0) +
+      meter('Navigateurs', usage.browser, limits.maxBrowserSessions || 0) +
+      '<p class="quota-note"' + (tvCap ? ' data-tone="warn"' : '') + '>' + quotaNote + '</p>' +
+    '</div>' +
+
     '<form class="card form-stack" id="plan-form"><div class="section-title"><h3 class="title-md">Formule</h3>' +
-    (d.planSource ? '<span class="faint">' + esc(d.planSource === 'admin.grant' ? 'Attribuée par l’admin' : d.planSource) + '</span>' : '') + '</div>' +
+    (d.planSource ? '<span class="muted">' + esc(d.planSource === 'admin.grant' ? 'Attribuée par l’admin' : d.planSource) + '</span>' : '') + '</div>' +
     '<div class="seg" role="radiogroup" aria-label="Formule">' + planOptions + '</div>' +
     '<label class="field"><span>Expiration (facultatif)</span><input type="date" id="plan-expiry" value="' + dateInputValue(d.planExpiresAtMs) + '"></label>' +
     '<div><button class="btn btn-primary" type="submit">Appliquer la formule</button></div></form>' +
 
-    '<div><div class="section-title"><h3 class="title-md">Appareils</h3>' + (d.devices.length ? '<button class="btn btn-sm btn-quiet" id="sign-out-all">' + icon('logout') + 'Tout déconnecter</button>' : '') + '</div>' +
+    '<div><div class="section-title"><h3 class="title-md">Appareils actifs</h3>' + (d.devices.length ? '<button class="btn btn-sm btn-quiet" id="sign-out-all">' + icon('logout') + 'Tout déconnecter</button>' : '') + '</div>' +
     '<div class="list">' + devices + '</div></div>' +
 
-    '<div><h3 class="title-md section-title">Profils</h3><div class="chips">' + profiles + '</div></div>' +
-    '<div><h3 class="title-md section-title">Extensions</h3>' + addons + '</div>' +
+    (revoked ? '<div class="revoked"><div class="section-title"><h3 class="title-md">Récemment déconnectés</h3></div><div class="list">' + revoked + '</div></div>' : '') +
+
+    '<div><div class="section-title"><h3 class="title-md">Extensions</h3><span class="muted num">' + usage.addons + ' / ' + (limits.maxAddons || 0) + '</span></div>' + addons + '</div>' +
 
     '<form class="card form-stack" id="password-form"><h3 class="title-md">Réinitialiser le mot de passe</h3>' +
-    '<p class="faint">Tous les appareils du compte seront déconnectés.</p>' +
+    '<p class="muted">Tous les appareils du compte seront déconnectés.</p>' +
     '<div class="inline-form"><label class="field"><span class="sr-only">Nouveau mot de passe</span><input id="reset-password" autocomplete="off" spellcheck="false" minlength="6" required placeholder="Nouveau mot de passe" class="mono"></label>' +
     '<button class="btn" type="button" id="generate-password">' + icon('key') + 'Générer</button></div>' +
     '<div><button class="btn btn-primary" type="submit">Réinitialiser</button></div></form>' +
 
-    '<div class="card danger-zone"><div class="card-head" style="margin:0"><div><h3 class="title-md">Supprimer le compte</h3><p class="faint">Efface le compte et toutes ses données.</p></div>' +
+    '<div class="card danger-zone"><div class="card-head" style="margin:0"><div><h3 class="title-md">Supprimer le compte</h3><p class="muted">Efface le compte et toutes ses données.</p></div>' +
     '<button class="btn btn-danger" id="delete-account">Supprimer</button></div></div>';
 }
 

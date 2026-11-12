@@ -40,9 +40,6 @@ final class PlaybackCoordinator {
     /// Plays `video` (or, for a series without one, the resume/first episode). `preferred` comes from the source picker.
     func play(item: MediaItem, video: VideoItem? = nil, episodes: [VideoItem]? = nil, preferred: StreamItem? = nil) async {
         guard !isResolving else { return }
-        guard !addons.urls.isEmpty else {
-            return fail("Aucun addon n'est configuré. Ajoutez-en un dans Réglages.")
-        }
         // Drop any prior session first so a new PlayerView cannot overlap a live VLC instance.
         if session != nil { close() }
         resolvingItem = item
@@ -64,16 +61,20 @@ final class PlaybackCoordinator {
         if let preferred {
             candidates = [preferred]
         } else {
-            let streams = await service.fetchStreams(type: item.type, id: videoID, addonBaseURLs: addons.urls)
+            let streams = await service.fetchStreams(type: item.type, id: videoID, addonBaseURLs: addons.activeURLs)
             candidates = StreamRanker.playbackCandidates(streams, device: device)
         }
         guard !candidates.isEmpty else {
-            return fail("Aucune source lisible sur Apple TV. Essayez « Choisir une source » ou un addon Debrid.")
+            return fail(PlaybackSourcePolicy.hasPersonalAddons(addons.activeURLs)
+                ? "Aucune source lisible sur Apple TV. Essayez « Choisir une source » ou un addon Debrid."
+                : "Aucune bande-annonce disponible pour ce titre.")
         }
 
+        // Trailers are progressive MP4s already — never seek a film's resume point into them.
+        let resume = candidates.allSatisfy(\.isYouTubeTrailer) ? nil : library.resumePosition(for: videoID)
         session = PlaybackSession(
             item: item, video: target, episodes: allEpisodes,
-            candidates: candidates, resumePosition: library.resumePosition(for: videoID)
+            candidates: candidates, resumePosition: resume
         )
     }
 
@@ -93,7 +94,11 @@ final class PlaybackCoordinator {
 
     /// Every candidate failed to open.
     func playbackFailed() {
-        fail("Le flux n'a pas pu être lu (format non supporté par Apple TV ou lien expiré). Essayez une autre source.")
+        let trailerOnly = session?.candidates.isEmpty == false
+            && session?.candidates.allSatisfy(\.isYouTubeTrailer) == true
+        fail(trailerOnly
+            ? "La bande-annonce n'a pas pu être lue (lien YouTube expiré ou format incompatible)."
+            : "Le flux n'a pas pu être lu (format non supporté par Apple TV ou lien expiré). Essayez une autre source.")
     }
 
     func close() {
@@ -101,8 +106,16 @@ final class PlaybackCoordinator {
     }
 
     private func fail(_ message: String) {
+        let hadPlayer = session != nil
         session = nil
-        errorMessage = message
+        if hadPlayer {
+            // Defer so the fullScreenCover can finish dismissing; presenting the alert in the same turn drops it.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                self.errorMessage = message
+            }
+        } else {
+            errorMessage = message
+        }
     }
 }
-

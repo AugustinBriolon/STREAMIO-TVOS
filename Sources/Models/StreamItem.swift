@@ -26,6 +26,20 @@ public struct StreamBehaviorHints: Codable, Hashable, Sendable {
     public let bingeGroup: String?
     public let filename: String?
     public let notWebReady: Bool?
+    /// Adaptive YouTube audio URL (AAC); VLC plays it via `:input-slave=`.
+    public let audioURL: String?
+
+    public init(
+        bingeGroup: String? = nil,
+        filename: String? = nil,
+        notWebReady: Bool? = nil,
+        audioURL: String? = nil
+    ) {
+        self.bingeGroup = bingeGroup
+        self.filename = filename
+        self.notWebReady = notWebReady
+        self.audioURL = audioURL
+    }
 }
 
 public struct StreamItem: Codable, Identifiable, Hashable, Sendable {
@@ -81,8 +95,39 @@ public struct StreamItem: Codable, Identifiable, Hashable, Sendable {
 
     public var isPlayable: Bool { playableURL != nil }
 
+    /// Built-in TMDB/YouTube trailer used when no personal addon is configured.
+    public static let trailerBingeGroup = "loge.trailer"
+
+    public var isYouTubeTrailer: Bool {
+        behaviorHints?.bingeGroup == Self.trailerBingeGroup
+    }
+
     /// True when an addon returned a diagnostic/filter notice rather than a playable stream or torrent.
-    public var isNotice: Bool { !isPlayable && infoHash == nil }
+    public var isNotice: Bool { !isPlayable && infoHash == nil && !isYouTubeTrailer }
+
+    /// Trailer resolved to googlevideo URLs for in-app VLC (muxed MP4 or adaptive video+audio).
+    public static func youtubeTrailer(videoKey: String, streamURL: URL, audioURL: URL? = nil) -> StreamItem {
+        StreamItem(
+            name: "Bande-annonce",
+            title: "YouTube · \(videoKey)",
+            url: streamURL.absoluteString,
+            behaviorHints: StreamBehaviorHints(
+                bingeGroup: trailerBingeGroup,
+                filename: "\(videoKey).mp4",
+                notWebReady: nil,
+                audioURL: audioURL?.absoluteString
+            )
+        )
+    }
+
+    /// Companion AAC URL for adaptive YouTube trailers.
+    public var trailerAudioURL: URL? {
+        guard isYouTubeTrailer,
+              let raw = behaviorHints?.audioURL,
+              let parsed = URL(string: raw),
+              ["http", "https"].contains(parsed.scheme?.lowercased()) else { return nil }
+        return parsed
+    }
 
     /// French reason shown when a source cannot be played on Apple TV.
     public var unplayableReason: String? {

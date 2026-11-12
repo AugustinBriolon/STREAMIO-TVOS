@@ -54,6 +54,7 @@ public final class AppPreferences {
         static let subtitleMode = "app.preferences.subtitleMode"
         static let preferredSubtitleLanguage = "app.preferences.preferredSubtitleLanguage"
         static let tmdbApiKey = "app.preferences.tmdbApiKey"
+        static let showWatchProviders = "app.preferences.showWatchProviders"
     }
 
     /// Clé API TMDB (v3) injectée au build via `Config/Secrets.xcconfig` → Info.plist (`TMDBApiKey`).
@@ -80,6 +81,11 @@ public final class AppPreferences {
         didSet { defaults.set(preferredSubtitleLanguage, forKey: Keys.preferredSubtitleLanguage) }
     }
 
+    /// Extension façade : logos « Disponible sur » (JustWatch/TMDB) sur la fiche titre.
+    public var showWatchProviders: Bool {
+        didSet { defaults.set(showWatchProviders, forKey: Keys.showWatchProviders) }
+    }
+
     public var effectiveTMDBKey: String {
         Self.tmdbApiKey
     }
@@ -95,5 +101,10 @@ public final class AppPreferences {
             self.subtitleMode = .auto
         }
         self.preferredSubtitleLanguage = defaults.string(forKey: Keys.preferredSubtitleLanguage) ?? "fr"
+        if defaults.object(forKey: Keys.showWatchProviders) == nil {
+            self.showWatchProviders = true
+        } else {
+            self.showWatchProviders = defaults.bool(forKey: Keys.showWatchProviders)
+        }
     }
 }

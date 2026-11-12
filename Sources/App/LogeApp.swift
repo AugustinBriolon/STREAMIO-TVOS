@@ -9,6 +9,7 @@ struct LogeApp: App {
     @State private var configServer: ConfigServer
     @State private var auth: AuthService
     @State private var syncEngine: CloudSyncEngine
+    @State private var entitlements: EntitlementStore
 
     init() {
         // Enregistrement de la locale et des langues pour la dictée et le clavier système tvOS
@@ -32,6 +33,7 @@ struct LogeApp: App {
         _auth = State(initialValue: auth)
         let sync = CloudSyncEngine(auth: auth, profiles: profiles, library: library, addons: addons)
         _syncEngine = State(initialValue: sync)
+        _entitlements = State(initialValue: EntitlementStore(auth: auth))
     }
 
     var body: some Scene {
@@ -44,6 +46,7 @@ struct LogeApp: App {
                 .environment(configServer)
                 .environment(auth)
                 .environment(syncEngine)
+                .environment(entitlements)
                 .preferredColorScheme(.dark)
                 .tint(Theme.Palette.accent)
                 .task {
@@ -51,6 +54,7 @@ struct LogeApp: App {
                     if auth.isAuthenticated {
                         await syncEngine.sync()
                     }
+                    await entitlements.loadProducts()
                 }
         }
     }

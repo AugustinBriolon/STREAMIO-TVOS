@@ -38,6 +38,12 @@ public final class LibraryStore {
         load()
     }
 
+    /// Forces a reload for `id` even when it is already the active profile (post-logout guest reset).
+    public func adoptProfile(_ id: UUID) {
+        profileID = id
+        load()
+    }
+
     /// Removes everything stored for a profile (used when the profile is deleted).
     nonisolated static func erase(profileID: UUID, from defaults: UserDefaults) {
         defaults.removeObject(forKey: StorageKey.myList(profileID))

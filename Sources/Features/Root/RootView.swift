@@ -8,22 +8,34 @@ final class RailOpener {
     var open: () -> Void = {}
 }
 
+/// Suppresses the nav rail as a focus candidate while Settings detail (not the rail) owns focus.
+/// `railFocused` must win: blocking the rail while it holds focus disables every icon and the enter-snap
+/// then pins focus on `selected` (felt as “stuck on Accueil”).
+@Observable final class RailBlocker {
+    nonisolated(unsafe) static let inert = RailBlocker()
+    var detailBlocksRail = false
+    var railFocused = false
+    var isBlocked: Bool { detailBlocksRail && !railFocused }
+}
+
 extension EnvironmentValues {
     @Entry var railOpener: RailOpener = .inert
+    @Entry var railBlocker: RailBlocker = .inert
 }
 
 extension View {
-    /// Menu on a page's root screen opens the rail. Pushed screens do not use this, so Menu still goes back.
-    func opensRailOnExit() -> some View {
-        modifier(OpensRailOnExit())
+    /// Menu on a page's root screen opens the rail. Disable while a destination is pushed so Menu pops.
+    func opensRailOnExit(when enabled: Bool = true) -> some View {
+        modifier(OpensRailOnExit(enabled: enabled))
     }
 }
 
 private struct OpensRailOnExit: ViewModifier {
+    var enabled: Bool = true
     @Environment(\.railOpener) private var opener
 
     func body(content: Content) -> some View {
-        content.onExitCommand { opener.open() }
+        content.onExitCommand(perform: enabled ? { opener.open() } : nil)
     }
 }
 
@@ -50,8 +62,9 @@ struct RootView: View {
     /// a selection and the next page focus (`railSuppressed`). From then on moving left from any card reaches it.
     @State private var railReady = false
     @State private var railSuppressed = false
+    @State private var railBlocker = RailBlocker()
     @State private var lastRailTab: AppTab?
-    private var railEnabled: Bool { railReady && !railSuppressed }
+    private var railEnabled: Bool { railReady && !railSuppressed && !railBlocker.isBlocked }
     @FocusState private var railFocus: AppTab?
 
     var body: some View {
@@ -86,6 +99,7 @@ struct RootView: View {
                 .onExitCommand(perform: returnFocusToPage)
         }
         .environment(\.railOpener, opener)
+        .environment(\.railBlocker, railBlocker)
         // Each profile has its own list and progress: follow the active one.
         .onChange(of: profiles.activeID) { _, id in
             library.switchProfile(to: id)
@@ -126,6 +140,7 @@ struct RootView: View {
             opener.open = {
                 railReady = true
                 railSuppressed = false
+                railBlocker.detailBlocksRail = false
                 Task { @MainActor in
                     await Task.yield()
                     railFocus = selected
@@ -134,6 +149,8 @@ struct RootView: View {
         }
         // Entering the rail from a page lands on the current destination, not on whichever icon is nearest in height.
         .onChange(of: railFocus) { old, new in
+            railBlocker.railFocused = (new != nil)
+            if new != nil { railBlocker.detailBlocksRail = false }
             if let new { lastRailTab = new }
             guard old == nil, let new, new != selected else { return }
             railFocus = selected

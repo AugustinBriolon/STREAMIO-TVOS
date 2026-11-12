@@ -8,9 +8,30 @@ struct ProfilesView: View {
 
     @State private var isManaging = false
     @State private var editing: ProfileEditorTarget?
+    @State private var showsPaywall = false
     @FocusState private var focus: UUID?
 
-    private let columns = [GridItem(.adaptive(minimum: ProfileCard.width), spacing: Theme.Spacing.xl)]
+    private var slotCount: Int {
+        profiles.profiles.count + (profiles.canAdd ? 1 : 0)
+    }
+
+    /// How many cards fit on one row inside the 1400pt rail, capped by how many we actually have.
+    private var columnsPerRow: Int {
+        let maxFit = max(1, Int((1400 + Theme.Spacing.xl) / (ProfileCard.width + Theme.Spacing.xl)))
+        return min(max(slotCount, 1), maxFit)
+    }
+
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.fixed(ProfileCard.width), spacing: Theme.Spacing.xl),
+            count: columnsPerRow
+        )
+    }
+
+    private var gridWidth: CGFloat {
+        let n = columnsPerRow
+        return CGFloat(n) * ProfileCard.width + CGFloat(max(n - 1, 0)) * Theme.Spacing.xl
+    }
 
     var body: some View {
         VStack(spacing: Theme.Spacing.xl) {
@@ -33,12 +54,22 @@ struct ProfilesView: View {
                     AddProfileCard { editing = .create }
                 }
             }
-            .frame(maxWidth: 1400)
+            .frame(width: gridWidth)
+            .frame(maxWidth: .infinity) // center the row as the count grows/shrinks
+            .animation(Theme.Motion.fade, value: slotCount)
             .focusSection()
-            Button(isManaging ? "Terminé" : "Gérer les profils", systemImage: isManaging ? "checkmark" : "pencil") {
-                isManaging.toggle()
+            HStack(spacing: Theme.Spacing.m) {
+                Button(isManaging ? "Terminé" : "Gérer les profils", systemImage: isManaging ? "checkmark" : "pencil") {
+                    isManaging.toggle()
+                }
+                .buttonStyle(PillButtonStyle(kind: isManaging ? .primary : .secondary))
+                if !profiles.canAdd {
+                    Button("Débloquer plus de profils", systemImage: "sparkles") {
+                        showsPaywall = true
+                    }
+                    .buttonStyle(PillButtonStyle(kind: .primary))
+                }
             }
-            .buttonStyle(PillButtonStyle(kind: isManaging ? .primary : .secondary))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
@@ -53,6 +84,9 @@ struct ProfilesView: View {
         .opensRailOnExit()
         .fullScreenCover(item: $editing) { target in
             ProfileEditorView(target: target)
+        }
+        .fullScreenCover(isPresented: $showsPaywall) {
+            SubscriptionPaywallView()
         }
     }
 }

@@ -25,6 +25,25 @@ const styles = String.raw`
 .auth-card header { display: grid; gap: 16px; }
 .pair-banner { display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-radius: var(--r-md); background: rgb(229 9 20 / 0.1); color: #ffb4b0; font-size: 14px; }
 .pair-banner strong { color: var(--text); }
+/* One chrome surface (same tokens as .field input); digits have no second background. */
+.pair-code {
+  display: flex; align-items: center; gap: 2px; min-height: 44px; width: 100%; padding: 0 14px;
+  border-radius: var(--r-md); background: rgb(255 255 255 / 0.05); border: 1px solid var(--line-strong);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.pair-code:focus-within { border-color: rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.07); }
+.pair-prefix {
+  flex: none; font: 600 15px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text); letter-spacing: 0.04em; user-select: none; pointer-events: none;
+}
+.pair-code input,
+.pair-code input:focus {
+  flex: 1; min-width: 0; min-height: 0; width: auto; padding: 0; margin: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none;
+  transition: none; font: 600 15px/1.2 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.18em; font-variant-numeric: tabular-nums; color: var(--text);
+}
+.pair-code input::placeholder { color: var(--text-3); letter-spacing: 0.18em; }
 
 .topbar {
   position: sticky; top: 0; z-index: 10; height: 60px; padding: 0 16px;
@@ -132,9 +151,11 @@ const body = `
       <section data-view="apercu" hidden>
         <div class="view-head"><p class="eyebrow" id="overview-email"></p><h1 class="title-xl" id="overview-title">Votre foyer</h1></div>
         <div class="card pair-card" id="pair-card">
-          <div><h2 class="title-md">Associer une Apple TV</h2><p class="muted">Saisissez le code affiché sur votre téléviseur.</p></div>
+          <div><h2 class="title-md">Associer une Apple TV</h2><p class="muted">Entrez les 4 chiffres affichés sur le téléviseur — le préfixe LOGE- est déjà là.</p></div>
           <form id="pair-form" class="inline-form">
-            <label class="field"><span class="sr-only">Code d’appairage</span><input id="pair-code" placeholder="LOGE-0000" autocomplete="off" spellcheck="false" maxlength="9" required></label>
+            <label class="field"><span class="sr-only">Code d’appairage</span>
+              <div class="pair-code"><span class="pair-prefix" aria-hidden="true">LOGE-</span><input id="pair-code" type="text" inputmode="numeric" pattern="[0-9]{4}" placeholder="0000" autocomplete="one-time-code" spellcheck="false" maxlength="4" required aria-label="Quatre chiffres du code d’appairage"></div>
+            </label>
             <button class="btn btn-primary" type="submit">Associer</button>
           </form>
         </div>
@@ -423,12 +444,26 @@ function signOutLocally() {
 }
 
 /* ---------- Pairing ---------- */
+function pairDigits(raw) {
+  return String(raw || '').toUpperCase().replace(/[^0-9]/g, '').slice(0, 4);
+}
+function pairCodeFromInput() {
+  return 'LOGE-' + pairDigits($('#pair-code').value);
+}
+function setPairDigits(raw) {
+  $('#pair-code').value = pairDigits(raw);
+}
+$('#pair-code').addEventListener('input', function () {
+  var digits = pairDigits(this.value);
+  if (this.value !== digits) this.value = digits;
+});
+
 function confirmPairing(code, button) {
   return withBusy(button, function () {
     return authed('/api/device/confirm', { body: { code: code } }).then(function (res) {
       if (!res.ok) { toast(res.data.error || 'Code invalide ou expiré.', 'error'); return; }
       toast('Apple TV associée. Elle se connecte…', 'success');
-      $('#pair-code').value = '';
+      setPairDigits('');
       $('#pair-card').classList.remove('is-highlighted');
       if (history.replaceState) history.replaceState(null, '', '/' + location.hash);
       setTimeout(loadDevices, 4000);
@@ -437,8 +472,8 @@ function confirmPairing(code, button) {
 }
 $('#pair-form').addEventListener('submit', function (e) {
   e.preventDefault();
-  var code = $('#pair-code').value.trim().toUpperCase();
-  if (!/^LOGE-[0-9]{4}$/.test(code)) { toast('Le code ressemble à LOGE-1234.', 'error'); return; }
+  var code = pairCodeFromInput();
+  if (!/^LOGE-[0-9]{4}$/.test(code)) { toast('Entrez les 4 chiffres du code affiché sur la TV.', 'error'); return; }
   confirmPairing(code, e.submitter);
 });
 
@@ -655,7 +690,7 @@ function start() {
     if (PAIR_CODE) {
       location.hash = '#apercu';
       $('#pair-card').classList.add('is-highlighted');
-      $('#pair-code').value = PAIR_CODE;
+      setPairDigits(PAIR_CODE);
       confirmPairing(PAIR_CODE);
       PAIR_CODE = '';
     }

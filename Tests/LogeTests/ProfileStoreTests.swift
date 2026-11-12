@@ -7,7 +7,11 @@ struct ProfileStoreTests {
     let defaults = makeDefaults()
     let legacy = makeDefaults()
 
-    private func makeStore() -> ProfileStore { ProfileStore(defaults: defaults, legacyDefaults: legacy) }
+    private func makeStore(plan: LogePlan = .ultra) -> ProfileStore {
+        let store = ProfileStore(defaults: defaults, legacyDefaults: legacy)
+        store.plan = plan
+        return store
+    }
 
     @Test func firstRunCreatesAProfileAndCopiesPreProfileData() throws {
         let progress = try JSONEncoder().encode([PlaybackProgress(item: movie("tt1"), video: nil, position: 600, duration: 6000, updatedAt: .now)])
@@ -51,6 +55,12 @@ struct ProfileStoreTests {
         for index in 2...ProfileStore.maxProfiles { try store.create(name: "P\(index)") }
         #expect(!store.canAdd)
         #expect(throws: ProfileError.limitReached) { try store.create(name: "Trop") }
+    }
+
+    @Test func freePlanAllowsOnlyOneProfile() throws {
+        let store = makeStore(plan: .free)
+        #expect(!store.canAdd)
+        #expect(throws: ProfileError.limitReached) { try store.create(name: "Deux") }
     }
 
     @Test func newProfilesGetDistinctAvatars() throws {
@@ -121,6 +131,19 @@ struct ProfileStoreTests {
         #expect(store.profiles == remote)
     }
 
+    @Test func guestProfil1StillAdoptableAndLoginRequestsPicker() throws {
+        let store = makeStore()
+        #expect(store.shouldAdoptAccountProfiles)
+        try store.create(name: "Léa")
+        try store.delete(store.profiles.first { $0.name == "Léa" }!.id)
+        #expect(store.profiles.map(\.name) == ["Profil 1"])
+        #expect(!store.isUntouchedDefault)
+        #expect(store.shouldAdoptAccountProfiles)
+        let before = store.adoptionCount
+        store.requestProfilePicker()
+        #expect(store.adoptionCount == before + 1)
+    }
+
     @Test func deletionIsRememberedAndNotUndoneByTheNextPull() throws {
         let store = makeStore()
         let lea = try store.create(name: "Léa")
@@ -143,6 +166,26 @@ struct ProfileStoreTests {
         #expect(store.activeID == first)
         store.applyRemoteDeletions([first: .now])
         #expect(store.profiles.map(\.id) == [first])
+    }
+
+    @Test func resetToGuestWipesProfilesLibrariesAndRestoresUntouchedDefault() throws {
+        let store = makeStore(plan: .ultra)
+        let lea = try store.create(name: "Léa")
+        let library = LibraryStore(profileID: lea.id, defaults: defaults)
+        library.toggleMyList(movie("tt9"))
+        let oldIDs = Set(store.profiles.map(\.id))
+
+        store.resetToGuest()
+
+        #expect(store.profiles.map(\.name) == ["Profil 1"])
+        #expect(store.isUntouchedDefault)
+        #expect(store.plan == .free)
+        #expect(store.deletedProfiles.isEmpty)
+        #expect(!oldIDs.contains(store.activeID))
+        for id in oldIDs {
+            #expect(defaults.data(forKey: StorageKey.myList(id)) == nil)
+        }
+        #expect(makeStore().profiles.map(\.name) == ["Profil 1"])
     }
 }
 

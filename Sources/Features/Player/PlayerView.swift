@@ -21,9 +21,6 @@ struct PlayerView: View {
     /// nor react to remote touches.
     private var surfaceFocused: Bool { focus == .surface }
     private var isOverlayVisible: Bool { controlsVisible || scrubber.isActive }
-    /// Welcome/pairing can cover the player without disappearing it; stop VLC as soon as auth is cleared.
-    private var authLost: Bool { !auth.isAuthenticated }
-
     init(session: PlaybackSession, playback: PlaybackCoordinator) {
         self.session = session
         _controller = State(initialValue: PlayerController(playback: playback))
@@ -96,8 +93,9 @@ struct PlayerView: View {
             controller.close()
             RemoteTiltModel.shared.start()
         }
-        .onChange(of: authLost) { _, lost in
-            if lost { controller.close() }
+        // Only tear down when a signed-in session is revoked mid-playback — guests are never authenticated.
+        .onChange(of: auth.isAuthenticated) { wasSignedIn, isSignedIn in
+            if wasSignedIn && !isSignedIn { controller.close() }
         }
         .onChange(of: session.id) {
             _ = scrubber.cancel()

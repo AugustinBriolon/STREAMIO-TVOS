@@ -34,7 +34,7 @@ struct HomeView: View {
                     .transition(.opacity)
                     .animation(Theme.Motion.fade, value: model.state)
             }
-            .opensRailOnExit()
+            .opensRailOnExit(when: path.isEmpty)
             .navigationDestination(for: MediaItem.self) {
                 DetailView(item: $0).navigationTransition(.zoom(sourceID: zoomSource.id, in: zoomNamespace))
             }
@@ -350,11 +350,14 @@ struct HomeView: View {
         ShelfRow(title, items: items) { item in
             let sourceID = "\(title)-\(item.id)"
             NavigationLink(value: item) { PosterCard(item: item) }
-                .matchedTransitionSource(id: sourceID, in: zoomNamespace)
                 .buttonStyle(CardFocusStyle(onFocus: {
                     backdrop.focus(item)
                     zoomSource.id = sourceID
                 }))
+                // After CardFocusStyle: source morph must keep the poster radius (before scale it squares corners).
+                .matchedTransitionSource(id: sourceID, in: zoomNamespace) { source in
+                    source.clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+                }
         }
     }
 }

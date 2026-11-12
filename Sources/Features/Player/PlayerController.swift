@@ -72,8 +72,14 @@ final class PlayerController {
     }
 
     private func startCandidate(at position: Double?) {
-        guard let session, candidateIndex < session.candidates.count,
-              let url = session.candidates[candidateIndex].playableURL else {
+        guard let session, candidateIndex < session.candidates.count else {
+            monitor?.cancel()
+            engine.stop()
+            playback.playbackFailed()
+            return
+        }
+        let candidate = session.candidates[candidateIndex]
+        guard let url = candidate.playableURL else {
             monitor?.cancel()
             engine.stop()
             playback.playbackFailed()
@@ -81,7 +87,7 @@ final class PlayerController {
         }
         appliedDefaultTracks = false
         lastSavedAt = position ?? 0
-        engine.open(url, startAt: position)
+        engine.open(url, startAt: position, audioSlaveURL: candidate.trailerAudioURL)
     }
 
     private func fallBackToNextCandidate() {

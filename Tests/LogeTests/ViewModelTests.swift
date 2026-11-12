@@ -70,8 +70,14 @@ struct DetailViewModelTests {
         #expect(availableModel.availability == .available(playableCount: 1, totalCount: 2))
         #expect(availableModel.availability.hasPlayableStream)
 
+        // Stub still returns playable streams; empty addons no longer short-circuit.
         await availableModel.checkAvailability(addons: [], targetVideoID: nil, device: .all)
-        #expect(availableModel.availability == .noAddons)
+        #expect(availableModel.availability == .available(playableCount: 1, totalCount: 2))
+
+        let bare = DetailViewModel(item: movie("tt-bare"), service: StubService())
+        await bare.checkAvailability(addons: [], targetVideoID: nil, device: .all)
+        #expect(bare.availability == .noAddons)
+        #expect(bare.primaryPlayTitle == "Lecture")
     }
 }
 

@@ -11,11 +11,27 @@ struct PlaybackCoordinatorTests {
         return PlaybackCoordinator(service: service, addons: addons, library: library, device: .all)
     }
 
-    @Test func explainsMissingAddons() async {
+    @Test func playsResolvedYouTubeTrailerInsideThePlayer() async {
+        var service = StubService()
+        let trailer = StreamItem.youtubeTrailer(
+            videoKey: "abc123",
+            streamURL: URL(string: "https://googlevideo.test/trailer.mp4")!
+        )
+        service.streams["tt9"] = [trailer]
+        let addons = AddonStore(storage: InMemorySecretStorage(AddonStore.defaultAddonURLs), legacyDefaults: makeDefaults())
+        let coordinator = PlaybackCoordinator(service: service, addons: addons, library: library, device: .all)
+        await coordinator.play(item: movie("tt9"))
+        #expect(coordinator.session?.candidates.first?.isYouTubeTrailer == true)
+        #expect(coordinator.session?.candidates.first?.url == "https://googlevideo.test/trailer.mp4")
+        #expect(coordinator.session?.resumePosition == nil)
+        #expect(coordinator.errorMessage == nil)
+    }
+
+    @Test func explainsMissingTrailerWhenNothingIsPlayableWithoutAddons() async {
         let coordinator = makeCoordinator(StubService(), addons: [])
         await coordinator.play(item: movie("tt9"))
         #expect(coordinator.session == nil)
-        #expect(coordinator.errorMessage?.contains("addon") == true)
+        #expect(coordinator.errorMessage?.contains("bande-annonce") == true)
     }
 
     @Test func picksBestPlayableStreamsAndResumePoint() async {

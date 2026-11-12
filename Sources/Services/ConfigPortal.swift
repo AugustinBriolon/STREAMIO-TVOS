@@ -98,8 +98,8 @@ public final class ConfigPortal {
 
     private func loginPage(error: String? = nil) -> String {
         page(body: """
-        <h1>Addons Apple TV</h1>
-        <p>Saisissez le code à 4 chiffres affiché dans <strong>Réglages</strong> sur l'Apple TV.</p>
+        <h1>Coller une extension</h1>
+        <p>Page Wi‑Fi locale de <strong>cette</strong> Apple TV — pas l’espace compte en ligne. PIN affiché dans <strong>Réglages → Extensions</strong>.</p>
         \(errorBanner(error))
         <form method="POST" action="/login">
         <input type="text" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required autofocus>
@@ -109,20 +109,33 @@ public final class ConfigPortal {
     }
 
     private func managePage(error: String? = nil) -> String {
-        let rows = addons.urls.enumerated().map { index, url in
-            """
+        let included = addons.includedURLs.map { url in
+            "<li><span>\(HTTPRequestParser.htmlEscape(AddonStore.displayTitle(url))) · Inclus</span></li>"
+        }.joined()
+        let personal = addons.urls.enumerated().compactMap { index, url -> String? in
+            guard !AddonStore.isDefaultAddonURL(url) else { return nil }
+            return """
             <li><span>\(HTTPRequestParser.htmlEscape(AddonStore.maskedDisplay(url)))</span>
             <form method="POST" action="/delete"><input type="hidden" name="index" value="\(index)">
             <button class="danger" type="submit">Supprimer</button></form></li>
             """
         }.joined()
-        let list = rows.isEmpty ? "<p class='muted'>Aucun addon configuré.</p>" : "<ul>\(rows)</ul>"
+        let includedBlock = included.isEmpty
+            ? "<p class='muted'>Inclus absents sur cette TV.</p>"
+            : "<ul>\(included)</ul>"
+        let personalBlock = personal.isEmpty
+            ? "<p class='muted'>Aucune installable.</p>"
+            : "<ul>\(personal)</ul>"
+        let limits = PlanLimits.forPlan(addons.plan)
         return page(body: """
-        <h1>Addons Apple TV</h1>
+        <h1>Coller une extension</h1>
+        <p class="muted">Les URLs ajoutées ici s’appliquent à cette Apple TV. Les inclus ne se suppriment pas et ne comptent pas dans l’offre.</p>
         \(errorBanner(error))
-        <h2>Addons actifs (\(addons.urls.count))</h2>
-        \(list)
-        <h2>Ajouter un addon</h2>
+        <h2>Incluses</h2>
+        \(includedBlock)
+        <h2>Installables (\(addons.personalAddonCount)/\(limits.maxAddons))</h2>
+        \(personalBlock)
+        <h2>Ajouter une installable</h2>
         <form method="POST" action="/add">
         <input type="text" name="addon_url" placeholder="https://…/manifest.json" autocomplete="off" required>
         <button type="submit">Ajouter à l'Apple TV</button>

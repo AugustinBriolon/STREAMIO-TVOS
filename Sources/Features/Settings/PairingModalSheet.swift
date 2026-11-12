@@ -7,6 +7,7 @@ struct PairingModalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthService.self) private var auth
     @Environment(CloudSyncEngine.self) private var syncEngine
+    @Environment(ProfileStore.self) private var profiles
 
     enum Mode: String, CaseIterable, Identifiable {
         case qrCode = "Jumelage QR Code (Recommandé)"
@@ -84,6 +85,7 @@ struct PairingModalSheet: View {
             if isAuth {
                 Task {
                     await syncEngine.sync()
+                    profiles.requestProfilePicker()
                     dismiss()
                 }
             }
@@ -275,6 +277,7 @@ struct PairingModalSheet: View {
                 try await auth.login(email: email, password: password)
             }
             await syncEngine.sync()
+            profiles.requestProfilePicker()
             dismiss()
         } catch {
             directError = error.localizedDescription

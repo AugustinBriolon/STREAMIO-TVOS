@@ -8,6 +8,8 @@ struct RemoteImage: View {
     var placeholderSymbol = "film"
     /// Backdrops draw their own base layer: no placeholder tint while loading.
     var showsPlaceholder = true
+    /// Posters fill the frame; brand logos must fit or TMDB PNGs get cropped into mush.
+    var contentMode: ContentMode = .fill
 
     @State private var image: UIImage?
     @State private var failed = false
@@ -16,7 +18,7 @@ struct RemoteImage: View {
         ZStack {
             if showsPlaceholder { Theme.Palette.surface }
             if let image = image ?? cachedImage {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
             } else if failed, showsPlaceholder {
                 Image(systemName: placeholderSymbol)
                     .font(.system(size: 40))

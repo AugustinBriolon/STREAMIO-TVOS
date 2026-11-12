@@ -31,8 +31,7 @@ struct BrandHubCard: View {
             if let logoURL = hub.logoURL {
                 if hub.category == .platform {
                     // Les plateformes ont une icône carrée/squircle officielle 332x332
-                    RemoteImage(url: logoURL, maxPixel: 240)
-                        .scaledToFit()
+                    RemoteImage(url: logoURL, maxPixel: 240, showsPlaceholder: false, contentMode: .fit)
                         .frame(width: 76, height: 76)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay {
@@ -41,11 +40,16 @@ struct BrandHubCard: View {
                         }
                         .shadow(color: Color.black.opacity(0.35), radius: 8, y: 4)
                 } else {
-                    // Les studios ont un logo vectoriel/horizontal (A24, Warner, Ghibli, Universal...)
-                    RemoteImage(url: logoURL, maxPixel: 400)
-                        .scaledToFit()
-                        .frame(maxWidth: size.width - Theme.Spacing.l * 2, maxHeight: size.height - Theme.Spacing.m * 2)
-                        .shadow(color: Color.black.opacity(0.4), radius: 6, y: 3)
+                    // Studios / networks: logos TMDB souvent larges ou noirs sur alpha — plateau clair + fit.
+                    RemoteImage(url: logoURL, maxPixel: 400, showsPlaceholder: false, contentMode: .fit)
+                        .padding(Theme.Spacing.s)
+                        .frame(maxWidth: size.width - Theme.Spacing.l, maxHeight: size.height - Theme.Spacing.l)
+                        .padding(Theme.Spacing.s)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.92))
+                        )
+                        .shadow(color: Color.black.opacity(0.35), radius: 6, y: 3)
                 }
             } else {
                 // Fallback avec symbole SF Symbol si absence d'image

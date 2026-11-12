@@ -1,0 +1,163 @@
+{
+  "identifier" : "LogeStore",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "99.99",
+      "familyShareable" : true,
+      "internalID" : "LOGEULTRALIFE",
+      "localizations" : [
+        {
+          "description" : "Ultra à vie : 6 profils, 20 addons, 4 Apple TV, sync cloud.",
+          "displayName" : "Loge Ultra Lifetime",
+          "locale" : "fr_FR"
+        }
+      ],
+      "productID" : "loge.ultra.lifetime",
+      "referenceName" : "Ultra Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "LOGEPREMIUM",
+      "localizations" : [
+        {
+          "locale" : "fr_FR",
+          "name" : "Loge"
+        }
+      ],
+      "name" : "Loge",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "3.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "LOGEPROMONTH",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "3 profils, 5 addons, 2 Apple TV, sync.",
+              "displayName" : "Loge Pro mensuel",
+              "locale" : "fr_FR"
+            }
+          ],
+          "productID" : "loge.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly",
+          "subscriptionGroupID" : "LOGEPREMIUM",
+          "type" : "RecurringSubscription",
+          "winBackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "29.99",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "LOGEPROYEAR",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Pro à l’année.",
+              "displayName" : "Loge Pro annuel",
+              "locale" : "fr_FR"
+            }
+          ],
+          "productID" : "loge.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro Yearly",
+          "subscriptionGroupID" : "LOGEPREMIUM",
+          "type" : "RecurringSubscription",
+          "winBackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "7.99",
+          "familyShareable" : true,
+          "groupNumber" : 2,
+          "internalID" : "LOGEULTRAMONTH",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "6 profils, 20 addons, 4 Apple TV.",
+              "displayName" : "Loge Ultra mensuel",
+              "locale" : "fr_FR"
+            }
+          ],
+          "productID" : "loge.ultra.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Ultra Monthly",
+          "subscriptionGroupID" : "LOGEPREMIUM",
+          "type" : "RecurringSubscription",
+          "winBackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "59.99",
+          "familyShareable" : true,
+          "groupNumber" : 2,
+          "internalID" : "LOGEULTRAYEAR",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Ultra à l’année.",
+              "displayName" : "Loge Ultra annuel",
+              "locale" : "fr_FR"
+            }
+          ],
+          "productID" : "loge.ultra.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Ultra Yearly",
+          "subscriptionGroupID" : "LOGEPREMIUM",
+          "type" : "RecurringSubscription",
+          "winBackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

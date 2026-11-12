@@ -48,11 +48,21 @@ final class VLCPlayerEngine: NSObject {
 
     var hasVideoOutput: Bool { player.hasVideoOut }
 
-    func open(_ url: URL, startAt seconds: Double?) {
+    func open(_ url: URL, startAt seconds: Double?, audioSlaveURL: URL? = nil) {
         didNotifyPlaying = false
         currentURL = url
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=\(Self.effectiveNetworkCaching)")
+        // googlevideo URLs (YouTube trailers) reject empty/odd UAs.
+        let isGoogleVideo = url.host?.contains("googlevideo.com") == true
+            || audioSlaveURL?.host?.contains("googlevideo.com") == true
+        if isGoogleVideo {
+            media.addOption(":http-user-agent=com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip")
+        }
+        // Adaptive YouTube: video-only MP4 + AAC companion via input-slave (`#` forces URL parse).
+        if let audioSlaveURL {
+            media.addOption(":input-slave=#\(audioSlaveURL.absoluteString)")
+        }
         probe.opened(at: Date())
         if let seconds, seconds > 0 { media.addOption(":start-time=\(Int(seconds))") }
         currentTime = seconds ?? 0

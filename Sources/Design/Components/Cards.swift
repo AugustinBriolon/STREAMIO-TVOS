@@ -5,14 +5,19 @@ struct PosterCard: View {
     let item: MediaItem
 
     var body: some View {
-        RemoteImage(url: item.posterURL, maxPixel: Theme.Card.posterSize.height * Theme.pixelScale)
-            .frame(width: Theme.Card.posterSize.width, height: Theme.Card.posterSize.height)
-            .overlay {
-                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-            .accessibilityLabel(item.name)
+        // Opaque surface under the poster (same as AwardedMediaCard): focus scale + zoom
+        // transition otherwise rasterize a transparent edge and square the corners.
+        ZStack {
+            Theme.Palette.surface
+            RemoteImage(url: item.posterURL, maxPixel: Theme.Card.posterSize.height * Theme.pixelScale)
+        }
+        .frame(width: Theme.Card.posterSize.width, height: Theme.Card.posterSize.height)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+        }
+        .accessibilityLabel(item.name)
     }
 }
 

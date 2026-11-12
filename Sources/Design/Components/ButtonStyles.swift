@@ -68,6 +68,8 @@ private struct CardFocusBody: View {
                         .allowsHitTesting(false)
                 }
             }
+            // Flatten clipped artwork before scale/3D — otherwise focus scale squares the corners.
+            .compositingGroup()
             .scaleEffect(Theme.Motion.scale(focused: isFocused, pressed: configuration.isPressed, focusScale: focusScale, reduceMotion: reduceMotion))
             // 3D Parallax Tilt along X (pitch) and Y (yaw) with camera perspective:
             .rotation3DEffect(.degrees(pitchDegrees), axis: (x: 1, y: 0, z: 0), perspective: 0.65)

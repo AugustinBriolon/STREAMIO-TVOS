@@ -1,6 +1,21 @@
 import Foundation
 
 /// Modèle pour les hubs interactifs de studios et de plateformes de streaming.
+/// One TMDB `/discover` page for hub catalogs (platforms, studios, networks).
+public struct DiscoverPage: Sendable {
+    public let items: [MediaItem]
+    public let page: Int
+    public let totalPages: Int
+
+    public init(items: [MediaItem], page: Int, totalPages: Int) {
+        self.items = items
+        self.page = page
+        self.totalPages = max(totalPages, 1)
+    }
+
+    public var hasMore: Bool { page < totalPages }
+}
+
 public struct BrandHub: Identifiable, Hashable, Sendable {
     public enum Category: String, Codable, Sendable {
         case studio
@@ -65,11 +80,16 @@ public struct BrandHub: Identifiable, Hashable, Sendable {
         BrandHub(id: "paramount-movies", name: "Paramount+", subtitle: "Montagne de divertissement", category: .platform, querySource: .watchProvider(531), type: .movie, accentColorHex: "#0064FF", systemSymbol: "mountain.2.fill", logoPath: "/pkx3klJlwW5JdtaulvDx6hDNtch.png")
     ]
 
-    /// Studios de cinéma emblématiques
+    /// Studios de cinéma emblématiques (IDs / logos vérifiés sur TMDB `/company/{id}`).
     public static let movieStudios: [BrandHub] = [
+        BrandHub(id: "marvel-movies", name: "Marvel Studios", subtitle: "MCU & super-héros", category: .studio, querySource: .company(420), type: .movie, accentColorHex: "#E23636", systemSymbol: "bolt.shield.fill", logoPath: "/hUzeosd33nzE5MCNsZxCGEKTXaQ.png"),
+        BrandHub(id: "pixar-movies", name: "Pixar", subtitle: "Animation & émotion", category: .studio, querySource: .company(3), type: .movie, accentColorHex: "#00AEEF", systemSymbol: "lamp.desk.fill", logoPath: "/1TjvGVDMYsj6JBxOAkUHpPEwLf7.png"),
+        BrandHub(id: "lucasfilm-movies", name: "Lucasfilm", subtitle: "Star Wars & Indy", category: .studio, querySource: .company(1), type: .movie, accentColorHex: "#F5C518", systemSymbol: "sparkles", logoPath: "/tlVSws0RvvtPBwViUyOFAO0vcQS.png"),
         BrandHub(id: "a24-movies", name: "A24", subtitle: "Cinéma d'auteur & indépendant", category: .studio, querySource: .company(41077), type: .movie, accentColorHex: "#E5A93C", systemSymbol: "star.fill", logoPath: "/1ZXsGaFPgrgS6ZZGS37AqD5uU12.png"),
         BrandHub(id: "warner-movies", name: "Warner Bros.", subtitle: "Légendes hollywoodiennes", category: .studio, querySource: .company(174), type: .movie, accentColorHex: "#004B93", systemSymbol: "shield.fill", logoPath: "/zhD3hhtKB5qyv7ZeL4uLpNxgMVU.png"),
         BrandHub(id: "disney-studio", name: "Walt Disney", subtitle: "Classiques & animation culte", category: .studio, querySource: .company(2), type: .movie, accentColorHex: "#1B56D8", systemSymbol: "wand.and.stars", logoPath: "/wdrCwmRnLFJhEoH8GSfymY85KHT.png"),
+        BrandHub(id: "dreamworks-movies", name: "DreamWorks", subtitle: "Animation & blockbusters", category: .studio, querySource: .company(521), type: .movie, accentColorHex: "#7AC143", systemSymbol: "moon.stars.fill", logoPath: "/3BPX5VGBov8SDqTV7wC1L1xShAS.png"),
+        BrandHub(id: "legendary-movies", name: "Legendary", subtitle: "Spectaculaire & SF", category: .studio, querySource: .company(923), type: .movie, accentColorHex: "#C9A227", systemSymbol: "mountain.2.fill", logoPath: "/5UQsZrfbfG2dYJbx8DxfoTr2Bvu.png"),
         BrandHub(id: "universal-movies", name: "Universal", subtitle: "Franchises planétaires", category: .studio, querySource: .company(33), type: .movie, accentColorHex: "#D4AF37", systemSymbol: "globe.americas.fill", logoPath: "/8lvHyhjr8oUKOOy2dKXoALWKdp0.png"),
         BrandHub(id: "ghibli-movies", name: "Studio Ghibli", subtitle: "Chefs-d'œuvre de Miyazaki", category: .studio, querySource: .company(10342), type: .movie, accentColorHex: "#34C759", systemSymbol: "leaf.fill", logoPath: "/uFuxPEZRUcBTEiYIxjHJq62Vr77.png"),
         BrandHub(id: "paramount-studio", name: "Paramount", subtitle: "Grands classiques du 7e art", category: .studio, querySource: .company(4), type: .movie, accentColorHex: "#0064FF", systemSymbol: "mountain.2.fill", logoPath: "/jay6WcMgagAklUt7i9Euwj1pzTF.png"),
@@ -86,14 +106,19 @@ public struct BrandHub: Identifiable, Hashable, Sendable {
         BrandHub(id: "canal-series", name: "Canal+ Séries", subtitle: "Créations Originales françaises", category: .platform, querySource: .watchProvider(381), type: .series, accentColorHex: "#000000", systemSymbol: "tv.fill", logoPath: "/gliWKhLJVdm7QwL1braBCRko5dx.png")
     ]
 
-    /// Chaînes et réseaux prestigieux pour les séries
+    /// Chaînes et réseaux prestigieux (IDs / logos vérifiés sur TMDB `/network/{id}`).
     public static let seriesNetworks: [BrandHub] = [
+        BrandHub(id: "netflix-network", name: "Netflix", subtitle: "Originals & phénomènes mondiaux", category: .network, querySource: .network(213), type: .series, accentColorHex: "#E50914", systemSymbol: "play.tv.fill", logoPath: "/wwemzKWzjKYJFfCeiB57q3r4Bcm.png"),
         BrandHub(id: "hbo-series", name: "HBO", subtitle: "La référence absolue de la télévision", category: .network, querySource: .network(49), type: .series, accentColorHex: "#9B51E0", systemSymbol: "crown.fill", logoPath: "/tuomPhY2UtuPTqqFnKMVHvSb724.png"),
+        BrandHub(id: "disney-network", name: "Disney+", subtitle: "Marvel, Star Wars & Star", category: .network, querySource: .network(2739), type: .series, accentColorHex: "#113CCF", systemSymbol: "sparkles.tv.fill", logoPath: "/1edZOYAfoyZyZ3rklNSiUpXX30Q.png"),
+        BrandHub(id: "apple-tv-network", name: "Apple TV+", subtitle: "Science-fiction & drames majeurs", category: .network, querySource: .network(2552), type: .series, accentColorHex: "#FFFFFF", systemSymbol: "apple.logo", logoPath: "/bngHRFi794mnMq34gfVcm9nDxN1.png"),
         BrandHub(id: "fx-series", name: "FX", subtitle: "Récits audacieux, incisifs & primés", category: .network, querySource: .network(88), type: .series, accentColorHex: "#F2994A", systemSymbol: "flame.fill", logoPath: "/aexGjtcs42DgRtZh7zOxayiry4J.png"),
+        BrandHub(id: "amc-series", name: "AMC", subtitle: "Sagas cultes & univers intenses", category: .network, querySource: .network(174), type: .series, accentColorHex: "#EB5757", systemSymbol: "tv.and.mediabox.fill", logoPath: "/pmvRmATOCaDykE6JrVoeYxlFHw3.png"),
         BrandHub(id: "bbc-series", name: "BBC", subtitle: "L'excellence britannique & drames", category: .network, querySource: .network(4), type: .series, accentColorHex: "#E02020", systemSymbol: "character.book.closed.fill", logoPath: "/uJjcCg3O4DMEjM0xtno9OWFciRP.png"),
-        BrandHub(id: "apple-studios-series", name: "Apple Studios", subtitle: "Science-fiction & drames majeurs", category: .network, querySource: .network(2552), type: .series, accentColorHex: "#FFFFFF", systemSymbol: "apple.logo", logoPath: "/9icYBfYFcwgCbky5VdGUIKJ4C5i.png"),
-        BrandHub(id: "amc-series", name: "AMC", subtitle: "Sagas cultes & univers intenses", category: .network, querySource: .network(1743), type: .series, accentColorHex: "#EB5757", systemSymbol: "tv.and.mediabox.fill", logoPath: "/oe1xnRABeZpnI0tA50x0gB014oX.png"),
-        BrandHub(id: "showtime-series", name: "Showtime", subtitle: "Thrillers psychologiques & portraits", category: .network, querySource: .network(67), type: .series, accentColorHex: "#D80027", systemSymbol: "film.stack.fill", logoPath: "/257LvQnSLHJAWf6rtJjJbxRkJhL.png")
+        BrandHub(id: "sky-atlantic-series", name: "Sky Atlantic", subtitle: "Drames britanniques & prestige", category: .network, querySource: .network(1063), type: .series, accentColorHex: "#6EC1E4", systemSymbol: "cloud.fill", logoPath: "/7D7LrfNPPRbogiFpAQ1qLpWBZB0.png"),
+        BrandHub(id: "peacock-series", name: "Peacock", subtitle: "Universal & thrillers US", category: .network, querySource: .network(3353), type: .series, accentColorHex: "#FDB927", systemSymbol: "play.rectangle.fill", logoPath: "/gIAcGTjKKr0KOHL5s4O36roJ8p7.png"),
+        BrandHub(id: "showtime-series", name: "Showtime", subtitle: "Thrillers psychologiques & portraits", category: .network, querySource: .network(67), type: .series, accentColorHex: "#D80027", systemSymbol: "film.stack.fill", logoPath: "/257LvQnSLHJAWf6rtJjJbxRkJhL.png"),
+        BrandHub(id: "hulu-series", name: "Hulu", subtitle: "Comédies & limited series", category: .network, querySource: .network(453), type: .series, accentColorHex: "#1CE783", systemSymbol: "tv.fill", logoPath: "/pqUTCleNUiTLAVlelGxUgWn1ELh.png")
     ]
 }
 

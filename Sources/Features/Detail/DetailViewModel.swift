@@ -115,14 +115,8 @@ final class DetailViewModel {
     }
 
     /// Checks once per (videoID, addons) whether at least one playable stream exists on this Apple TV.
+    /// Empty addons still query the service (built-in YouTube trailer).
     func checkAvailability(addons: [String], targetVideoID: String?, device: DeviceCapabilities = .all) async {
-        guard !addons.isEmpty else {
-            prefetchedStreams = []
-            checkedVideoID = nil
-            availability = .noAddons
-            return
-        }
-
         let checkID: String? = switch item.type {
         case .movie: summary.id
         case .series: targetVideoID ?? episodes.firstEpisode?.id
@@ -142,6 +136,8 @@ final class DetailViewModel {
         let playable = ranked.filter(\.isPlayable)
         if !playable.isEmpty {
             availability = .available(playableCount: playable.count, totalCount: ranked.count)
+        } else if addons.isEmpty {
+            availability = .noAddons
         } else {
             var seen = Set<String>()
             let notices = ranked.filter(\.isNotice)
@@ -149,6 +145,14 @@ final class DetailViewModel {
                 .filter { !$0.isEmpty && seen.insert($0).inserted }
             availability = .unavailable(notices: notices, totalCount: ranked.count)
         }
+    }
+
+    var primaryPlayTitle: String {
+        let playable = prefetchedStreams.filter(\.isPlayable)
+        if !playable.isEmpty, playable.allSatisfy(\.isYouTubeTrailer) {
+            return "Bande-annonce"
+        }
+        return "Lecture"
     }
 
     /// Same first genre, excluding this title. Cinemeta has no recommendation endpoint.

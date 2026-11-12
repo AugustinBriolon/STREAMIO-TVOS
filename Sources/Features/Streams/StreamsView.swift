@@ -99,8 +99,8 @@ struct StreamsView: View {
                 StateView(kind: .empty(
                     symbol: "antenna.radiowaves.left.and.right.slash",
                     title: "Aucune source trouvée",
-                    message: addons.urls.isEmpty
-                        ? "Aucun addon n'est configuré. Ajoutez-en un dans Réglages."
+                    message: addons.activeURLs.isEmpty
+                        ? "Aucune bande-annonce trouvée. Ajoutez un addon dans Réglages pour d'autres sources."
                         : "Vos addons n'ont renvoyé aucun flux pour ce contenu."
                 ))
             case .loaded where model.displayedStreams.isEmpty:
@@ -137,7 +137,7 @@ struct StreamsView: View {
         }
         .padding(.top, Theme.Spacing.xl)
         .background(Theme.Palette.canvas)
-        .task { await model.load(type: type, videoID: videoID, addons: addons.urls) }
+        .task { await model.load(type: type, videoID: videoID, addons: addons.activeURLs) }
     }
 
     private var filterBar: some View {
@@ -145,7 +145,7 @@ struct StreamsView: View {
             filterButton(.playableOnly, label: "Lisibles (\(model.playableCount))")
             filterButton(.all, label: "Toutes (\(model.streams.count))")
             Button {
-                Task { await model.load(type: type, videoID: videoID, addons: addons.urls, forceRefresh: true) }
+                Task { await model.load(type: type, videoID: videoID, addons: addons.activeURLs, forceRefresh: true) }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }

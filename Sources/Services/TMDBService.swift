@@ -16,6 +16,7 @@ struct TMDBFindTVResult: Decodable {
 
 private struct TMDBPageResponse<T: Decodable>: Decodable {
     let page: Int?
+    let total_pages: Int?
     let results: [T]
 }
 
@@ -172,6 +173,35 @@ private struct TMDBExternalIDsResponse: Decodable {
     let imdb_id: String?
 }
 
+private struct TMDBVideosResponse: Decodable {
+    let results: [TMDBVideoItem]?
+}
+
+public struct TMDBVideoItem: Decodable, Equatable, Sendable {
+    public let key: String?
+    public let name: String?
+    public let site: String?
+    public let type: String?
+    public let official: Bool?
+    public let iso_639_1: String?
+
+    public init(
+        key: String?,
+        name: String? = nil,
+        site: String? = "YouTube",
+        type: String?,
+        official: Bool? = nil,
+        iso_639_1: String?
+    ) {
+        self.key = key
+        self.name = name
+        self.site = site
+        self.type = type
+        self.official = official
+        self.iso_639_1 = iso_639_1
+    }
+}
+
 /// Résultat enrichi et traduit issu de TMDB
 public struct TMDBEnrichedMeta: Sendable {
     public let tmdbID: Int
@@ -180,6 +210,7 @@ public struct TMDBEnrichedMeta: Sendable {
     public let localizedGenres: [String]?
     public let directors: [String]?
     public let castMembers: [CastMember]
+    public let watchProviders: [WatchProvider]
 }
 
 /// Service de communication avec The Movie Database (TMDB v3) pour la localisation et le casting enrichi.
@@ -207,6 +238,20 @@ public struct TMDBService: Sendable {
         }
     }
 
+    /// Région JustWatch alignée sur la langue métadonnées (hubs catalogue = FR).
+    public static func watchRegion(for language: String) -> String {
+        switch String(language.prefix(2)).lowercased() {
+        case "en": return "US"
+        case "fr": return "FR"
+        case "es": return "ES"
+        case "de": return "DE"
+        case "it": return "IT"
+        case "pt": return "BR"
+        case "ja": return "JP"
+        default: return "FR"
+        }
+    }
+
     /// Récupère les métadonnées traduites et le casting complet à partir d'un identifiant IMDb (`tt...`).
     public func fetchEnrichedMeta(imdbID: String, type: MediaType, language: String, apiKey: String) async -> TMDBEnrichedMeta? {
         guard imdbID.hasPrefix("tt"), !apiKey.isEmpty else { return nil }
@@ -221,14 +266,132 @@ public struct TMDBService: Sendable {
             return nil
         }
 
+        let region = Self.watchRegion(for: language)
         switch type {
         case .movie:
             guard let movieItem = findResult.movie_results?.first else { return nil }
-            return await fetchMovieDetail(tmdbID: movieItem.id, language: lang, apiKey: apiKey)
+            return await fetchMovieDetail(tmdbID: movieItem.id, language: lang, region: region, apiKey: apiKey)
         case .series:
             guard let tvItem = findResult.tv_results?.first else { return nil }
-            return await fetchTVDetail(tmdbID: tvItem.id, language: lang, apiKey: apiKey)
+            return await fetchTVDetail(tmdbID: tvItem.id, language: lang, region: region, apiKey: apiKey)
         }
+    }
+
+    /// Flatrate puis rent/buy, dédoublonnés, pour la région JustWatch.
+    public static func pickWatchProviders(from regionPayload: [String: Any]?, limit: Int = 8) -> [WatchProvider] {
+        guard let regionPayload else { return [] }
+        var seen = Set<Int>()
+        var result: [WatchProvider] = []
+        for key in ["flatrate", "free", "ads", "rent", "buy"] {
+            let rows = regionPayload[key] as? [[String: Any]] ?? []
+            for row in rows {
+                guard let id = row["provider_id"] as? Int,
+                      let name = row["provider_name"] as? String,
+                      seen.insert(id).inserted else { continue }
+                result.append(WatchProvider(id: id, name: name, logoPath: row["logo_path"] as? String))
+                if result.count >= limit { return result }
+            }
+        }
+        return result
+    }
+
+    public func fetchWatchProviders(tmdbID: Int, type: MediaType, region: String, apiKey: String) async -> [WatchProvider] {
+        guard !apiKey.isEmpty else { return [] }
+        let path = type == .movie ? "movie" : "tv"
+        let endpoint = "\(baseURL)/\(path)/\(tmdbID)/watch/providers?api_key=\(apiKey)"
+        guard let url = URL(string: endpoint),
+              let (data, resp) = try? await session.data(from: url),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = payload["results"] as? [String: Any] else {
+            return []
+        }
+        let regionPayload = results[region] as? [String: Any]
+            ?? results["FR"] as? [String: Any]
+            ?? results["US"] as? [String: Any]
+        return Self.pickWatchProviders(from: regionPayload)
+    }
+
+    /// Clé YouTube de la bande-annonce (Trailer > Teaser), via IMDb ou id `tmdb:`.
+    /// Prefers videos in `language` (metadata preference), then English, then any.
+    public func fetchYouTubeTrailerKey(id: String, type: MediaType, language: String, apiKey: String) async -> String? {
+        guard !apiKey.isEmpty else { return nil }
+        let tmdbID: Int
+        if id.hasPrefix("tmdb:"), let raw = Int(id.dropFirst(5)) {
+            tmdbID = raw
+        } else if id.hasPrefix("tt") {
+            let findEndpoint = "\(baseURL)/find/\(id)?api_key=\(apiKey)&external_source=imdb_id"
+            guard let findURL = URL(string: findEndpoint),
+                  let (findData, findResp) = try? await session.data(from: findURL),
+                  (findResp as? HTTPURLResponse)?.statusCode == 200,
+                  let findResult = try? JSONDecoder().decode(TMDBFindResponse.self, from: findData) else {
+                return nil
+            }
+            switch type {
+            case .movie:
+                guard let movie = findResult.movie_results?.first else { return nil }
+                tmdbID = movie.id
+            case .series:
+                guard let show = findResult.tv_results?.first else { return nil }
+                tmdbID = show.id
+            }
+        } else {
+            return nil
+        }
+
+        let lang = Self.tmdbLanguageCode(language)
+        let short = String(lang.prefix(2)).lowercased()
+        var includeLangs = [short]
+        if short != "en" { includeLangs.append("en") }
+        includeLangs.append("null")
+        let path = type == .movie ? "movie" : "tv"
+        let endpoint =
+            "\(baseURL)/\(path)/\(tmdbID)/videos?api_key=\(apiKey)&language=\(lang)&include_video_language=\(includeLangs.joined(separator: ","))"
+        guard let url = URL(string: endpoint),
+              let (data, resp) = try? await session.data(from: url),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let payload = try? JSONDecoder().decode(TMDBVideosResponse.self, from: data),
+              let results = payload.results else {
+            return nil
+        }
+
+        let youtube = results.filter { ($0.site ?? "").caseInsensitiveCompare("YouTube") == .orderedSame }
+        guard let key = Self.pickTrailerKey(from: youtube, preferredLanguage: short) else { return nil }
+        return key
+    }
+
+    /// Trailer/Teaser in preferred language first, then English, then any.
+    /// Prefers official uploads and demotes auto-dub / AI labels in the TMDB name.
+    public static func pickTrailerKey(from videos: [TMDBVideoItem], preferredLanguage: String) -> String? {
+        let preferred = preferredLanguage.lowercased()
+        let ranked = videos.sorted { lhs, rhs in
+            trailerRank(lhs, preferred: preferred) > trailerRank(rhs, preferred: preferred)
+        }
+        let key = ranked.first?.key?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (key?.isEmpty == false) ? key : nil
+    }
+
+    static func trailerRank(_ video: TMDBVideoItem, preferred: String) -> Int {
+        let type = (video.type ?? "").lowercased()
+        let lang = (video.iso_639_1 ?? "").lowercased()
+        let name = (video.name ?? "").lowercased()
+        var score = 0
+        switch type {
+        case "trailer": score += 300
+        case "teaser": score += 200
+        default: score += 50
+        }
+        if lang == preferred { score += 200 }
+        else if lang == "en" && preferred != "en" { score += 80 }
+        else if lang.isEmpty { score += 40 }
+        if video.official == true { score += 40 }
+        if preferred == "fr", name.contains("vf") || name.contains("français") || name.contains("french") {
+            score += 30
+        }
+        // YouTube auto-dub uploads often land in TMDB with a localized iso code — skip when named as such.
+        if name.contains("auto") && (name.contains("dub") || name.contains("doubl")) { score -= 400 }
+        if name.contains("ai dub") || name.contains("machine") { score -= 400 }
+        return score
     }
 
     /// Récupère la liste des épisodes traduits pour une saison donnée.
@@ -360,54 +523,76 @@ public struct TMDBService: Sendable {
         }
     }
 
-    /// Titres par plateforme de streaming (watch provider)
-    public func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String = "FR", apiKey: String) async -> [MediaItem] {
-        guard !apiKey.isEmpty else { return [] }
+    /// One discover page for a watch provider. Hub UI appends pages as the user scrolls.
+    public func fetchByWatchProvider(
+        type: MediaType,
+        providerID: Int,
+        language: String,
+        region: String = "FR",
+        page: Int = 1,
+        apiKey: String
+    ) async -> DiscoverPage {
+        guard !apiKey.isEmpty else { return DiscoverPage(items: [], page: page, totalPages: 1) }
         let lang = Self.tmdbLanguageCode(language)
         let typePath = (type == .series) ? "tv" : "movie"
-        let endpoint = "\(baseURL)/discover/\(typePath)?api_key=\(apiKey)&language=\(lang)&watch_region=\(region)&with_watch_providers=\(providerID)&sort_by=popularity.desc&page=1"
+        let endpoint = "\(baseURL)/discover/\(typePath)?api_key=\(apiKey)&language=\(lang)&watch_region=\(region)&with_watch_providers=\(providerID)&sort_by=popularity.desc&page=\(page)"
         guard let url = URL(string: endpoint),
               let (data, resp) = try? await session.data(from: url),
               (resp as? HTTPURLResponse)?.statusCode == 200 else {
-            return []
+            return DiscoverPage(items: [], page: page, totalPages: page)
         }
-
         switch type {
         case .movie:
-            let page = try? JSONDecoder().decode(TMDBPageResponse<TMDBMovieItem>.self, from: data)
-            return page?.results.map { $0.toMediaItem() } ?? []
+            let decoded = try? JSONDecoder().decode(TMDBPageResponse<TMDBMovieItem>.self, from: data)
+            return DiscoverPage(
+                items: decoded?.results.map { $0.toMediaItem() } ?? [],
+                page: page,
+                totalPages: decoded?.total_pages ?? page
+            )
         case .series:
-            let page = try? JSONDecoder().decode(TMDBPageResponse<TMDBTVItem>.self, from: data)
-            return page?.results.map { $0.toMediaItem() } ?? []
+            let decoded = try? JSONDecoder().decode(TMDBPageResponse<TMDBTVItem>.self, from: data)
+            return DiscoverPage(
+                items: decoded?.results.map { $0.toMediaItem() } ?? [],
+                page: page,
+                totalPages: decoded?.total_pages ?? page
+            )
         }
     }
 
-    /// Films par studio de production (compagnie TMDB)
-    public func fetchByCompany(companyID: Int, language: String, apiKey: String) async -> [MediaItem] {
-        guard !apiKey.isEmpty else { return [] }
+    /// One discover page for a production company.
+    public func fetchByCompany(companyID: Int, language: String, page: Int = 1, apiKey: String) async -> DiscoverPage {
+        guard !apiKey.isEmpty else { return DiscoverPage(items: [], page: page, totalPages: 1) }
         let lang = Self.tmdbLanguageCode(language)
-        let endpoint = "\(baseURL)/discover/movie?api_key=\(apiKey)&language=\(lang)&with_companies=\(companyID)&sort_by=popularity.desc&page=1"
+        let endpoint = "\(baseURL)/discover/movie?api_key=\(apiKey)&language=\(lang)&with_companies=\(companyID)&sort_by=popularity.desc&page=\(page)"
         guard let url = URL(string: endpoint),
               let (data, resp) = try? await session.data(from: url),
               (resp as? HTTPURLResponse)?.statusCode == 200,
-              let page = try? JSONDecoder().decode(TMDBPageResponse<TMDBMovieItem>.self, from: data) else {
-            return []
+              let decoded = try? JSONDecoder().decode(TMDBPageResponse<TMDBMovieItem>.self, from: data) else {
+            return DiscoverPage(items: [], page: page, totalPages: page)
         }
-        return page.results.map { $0.toMediaItem() }
+        return DiscoverPage(
+            items: decoded.results.map { $0.toMediaItem() },
+            page: page,
+            totalPages: decoded.total_pages ?? page
+        )
     }
 
-    /// Séries par chaîne / network de diffusion
-    public func fetchByNetwork(networkID: Int, language: String, apiKey: String) async -> [MediaItem] {
-        guard !apiKey.isEmpty else { return [] }
+    /// One discover page for a TV network.
+    public func fetchByNetwork(networkID: Int, language: String, page: Int = 1, apiKey: String) async -> DiscoverPage {
+        guard !apiKey.isEmpty else { return DiscoverPage(items: [], page: page, totalPages: 1) }
         let lang = Self.tmdbLanguageCode(language)
-        let endpoint = "\(baseURL)/discover/tv?api_key=\(apiKey)&language=\(lang)&with_networks=\(networkID)&sort_by=popularity.desc&page=1"
+        let endpoint = "\(baseURL)/discover/tv?api_key=\(apiKey)&language=\(lang)&with_networks=\(networkID)&sort_by=popularity.desc&page=\(page)"
         guard let url = URL(string: endpoint),
               let (data, resp) = try? await session.data(from: url),
               (resp as? HTTPURLResponse)?.statusCode == 200,
-              let page = try? JSONDecoder().decode(TMDBPageResponse<TMDBTVItem>.self, from: data) else {
-            return []
+              let decoded = try? JSONDecoder().decode(TMDBPageResponse<TMDBTVItem>.self, from: data) else {
+            return DiscoverPage(items: [], page: page, totalPages: page)
         }
-        return page.results.map { $0.toMediaItem() }
+        return DiscoverPage(
+            items: decoded.results.map { $0.toMediaItem() },
+            page: page,
+            totalPages: decoded.total_pages ?? page
+        )
     }
 
     /// Détail complet d'une saga / collection avec tous ses volets ordonnés
@@ -480,7 +665,7 @@ public struct TMDBService: Sendable {
 
     // MARK: - Privé
 
-    private func fetchMovieDetail(tmdbID: Int, language: String, apiKey: String) async -> TMDBEnrichedMeta? {
+    private func fetchMovieDetail(tmdbID: Int, language: String, region: String, apiKey: String) async -> TMDBEnrichedMeta? {
         let endpoint = "\(baseURL)/movie/\(tmdbID)?api_key=\(apiKey)&language=\(language)&append_to_response=credits"
         guard let url = URL(string: endpoint),
               let (data, resp) = try? await session.data(from: url),
@@ -507,6 +692,10 @@ public struct TMDBService: Sendable {
 
         let cleanTitle = detail.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanOverview = detail.overview?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let providersEnabled = await MainActor.run { AppPreferences.shared.showWatchProviders }
+        let providers = providersEnabled
+            ? await fetchWatchProviders(tmdbID: tmdbID, type: .movie, region: region, apiKey: apiKey)
+            : []
 
         return TMDBEnrichedMeta(
             tmdbID: tmdbID,
@@ -514,11 +703,12 @@ public struct TMDBService: Sendable {
             localizedOverview: cleanOverview?.isEmpty == false ? cleanOverview : nil,
             localizedGenres: detail.genres?.map(\.name),
             directors: directors?.isEmpty == false ? directors : nil,
-            castMembers: Array(castMembers)
+            castMembers: Array(castMembers),
+            watchProviders: providers
         )
     }
 
-    private func fetchTVDetail(tmdbID: Int, language: String, apiKey: String) async -> TMDBEnrichedMeta? {
+    private func fetchTVDetail(tmdbID: Int, language: String, region: String, apiKey: String) async -> TMDBEnrichedMeta? {
         let endpoint = "\(baseURL)/tv/\(tmdbID)?api_key=\(apiKey)&language=\(language)&append_to_response=credits"
         guard let url = URL(string: endpoint),
               let (data, resp) = try? await session.data(from: url),
@@ -545,6 +735,10 @@ public struct TMDBService: Sendable {
 
         let cleanTitle = detail.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanOverview = detail.overview?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let providersEnabled = await MainActor.run { AppPreferences.shared.showWatchProviders }
+        let providers = providersEnabled
+            ? await fetchWatchProviders(tmdbID: tmdbID, type: .series, region: region, apiKey: apiKey)
+            : []
 
         return TMDBEnrichedMeta(
             tmdbID: tmdbID,
@@ -552,7 +746,8 @@ public struct TMDBService: Sendable {
             localizedOverview: cleanOverview?.isEmpty == false ? cleanOverview : nil,
             localizedGenres: detail.genres?.map(\.name),
             directors: directors?.isEmpty == false ? directors : nil,
-            castMembers: Array(castMembers)
+            castMembers: Array(castMembers),
+            watchProviders: providers
         )
     }
 }

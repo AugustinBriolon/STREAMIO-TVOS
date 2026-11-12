@@ -62,6 +62,7 @@ export async function readToken(token: string, secret: string): Promise<any | nu
 }
 
 export type LogePlan = 'free' | 'pro' | 'ultra';
+export type SessionKind = 'tv' | 'browser';
 
 export interface PlanLimits {
   maxProfiles: number;
@@ -70,6 +71,26 @@ export interface PlanLimits {
   maxBrowserSessions: number;
   cloudSync: boolean;
   canRenameDevices: boolean;
+}
+
+/** Recover browser sessions created before device_kind existed (null → wrongly shown as TV). */
+export function inferSessionKind(kind: unknown, name: unknown, model: unknown): SessionKind {
+  const k = typeof kind === 'string' ? kind.toLowerCase() : '';
+  if (k === 'browser' || k === 'tv') return k;
+  const blob = `${name || ''} ${model || ''}`.toLowerCase();
+  if (
+    blob.includes('navigateur') ||
+    blob.includes('browser') ||
+    blob.includes('mac') ||
+    blob.includes('windows') ||
+    blob.includes('android') ||
+    blob.includes('iphone') ||
+    blob.includes('ipad') ||
+    /\bpc\b/.test(blob)
+  ) {
+    return 'browser';
+  }
+  return 'tv';
 }
 
 export function limitsFor(plan: LogePlan): PlanLimits {

@@ -5,6 +5,7 @@ struct DetailView: View {
     @State private var model: DetailViewModel
     @State private var sourcePicker: SourcePickerTarget?
     @State private var pickedStream: (target: SourcePickerTarget, stream: StreamItem)?
+    @State private var preferences = AppPreferences.shared
     @Environment(AddonStore.self) private var addons
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackCoordinator.self) private var playback
@@ -33,6 +34,7 @@ struct DetailView: View {
                         .transition(.opacity)
                 case .loaded:
                     VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                        if !model.distinctions.isEmpty { awardsSection }
                         if model.item.type == .series { episodesSection }
                         if !model.castMembers.isEmpty {
                             ShelfRow("Distribution", items: model.castMembers) { member in
@@ -48,7 +50,6 @@ struct DetailView: View {
                                     .buttonStyle(CardFocusStyle())
                             }
                         }
-                        if !model.distinctions.isEmpty { awardsSection }
                     }
                     .transition(.opacity)
                 case .idle, .loading:
@@ -66,9 +67,9 @@ struct DetailView: View {
             PersonDetailView(member: member)
         }
         .task { await model.loadIfNeeded(resumeSeason: resume?.video?.season) }
-        .task(id: "\(model.state == .loaded)-\(addons.urls.joined(separator: ","))") {
+        .task(id: "\(model.state == .loaded)-\(addons.activeURLs.joined(separator: ","))") {
             guard model.state == .loaded else { return }
-            await model.checkAvailability(addons: addons.urls, targetVideoID: resume?.video?.id, device: .current)
+            await model.checkAvailability(addons: addons.activeURLs, targetVideoID: resume?.video?.id, device: .current)
         }
         .restoresFocusAfterPlayback($focused, to: playOrigin)
         .sheet(item: $sourcePicker, onDismiss: playPickedStream) { target in
@@ -85,6 +86,7 @@ struct DetailView: View {
 
     // MARK: Hero
 
+    /// Hero = décision de lecture : identité, méta, pitch court, reprise, CTA, statut sources.
     private var hero: some View {
         let item = model.summary
         return VStack(alignment: .leading, spacing: Theme.Spacing.m) {
@@ -93,17 +95,14 @@ struct DetailView: View {
                 .stagedEntrance(0, shown: heroShown, reduceMotion: reduceMotion)
             MetaLine(rating: item.displayRating, components: item.metaComponents)
                 .stagedEntrance(1, shown: heroShown, reduceMotion: reduceMotion)
-            if !model.distinctions.isEmpty {
-                heroDistinctionStrip
-            }
             if let description = item.description, !description.isEmpty {
                 Text(description)
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Palette.textPrimary)
-                    .lineLimit(4)
+                    .lineLimit(2)
                     .frame(maxWidth: Theme.Layout.synopsisWidth, alignment: .leading)
+                    .stagedEntrance(1, shown: heroShown, reduceMotion: reduceMotion)
             }
-            credits
             if let resume, resume.position > 0 {
                 HStack(spacing: Theme.Spacing.m) {
                     ProgressBar(fraction: resume.fraction).frame(width: 300)
@@ -111,6 +110,11 @@ struct DetailView: View {
                         Text(remaining).font(Theme.Typography.caption).foregroundStyle(Theme.Palette.textSecondary)
                     }
                 }
+            }
+            if preferences.showWatchProviders,
+               let providers = model.detail?.watchProviders,
+               !providers.isEmpty {
+                watchProvidersSection(providers)
             }
             actions
                 .stagedEntrance(2, shown: heroShown, reduceMotion: reduceMotion)
@@ -120,8 +124,7 @@ struct DetailView: View {
         .padding(.horizontal, Theme.Spacing.gutter)
         .padding(.bottom, Theme.Spacing.l)
         .frame(maxWidth: .infinity, minHeight: Theme.Layout.billboardHeight, alignment: .bottomLeading)
-        // Fixed height and a pinned URL: the hero grows when credits and distinctions arrive, and the
-        // detail metadata often carries another image. Either one made the picture jump after it appeared.
+        // Fixed height + pinned backdrop URL: avoid layout jump when secondary metadata arrives below.
         .background(alignment: .top) {
             BakedBackdrop(url: model.backdropURL, dimming: 0.3)
                 .frame(height: Theme.Layout.backdropHeight)
@@ -130,18 +133,38 @@ struct DetailView: View {
         .focusSection()
     }
 
-    @ViewBuilder
-    private var credits: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-            if let cast = model.castLine { creditLine("Avec", cast) }
-            if let director = model.directorLine { creditLine("Réalisation", director) }
+    /// Façade SVOD : tuiles verre sombre alignées BrandHub (pas de pastilles blanches).
+    private func watchProvidersSection(_ providers: [WatchProvider]) -> some View {
+        let shown = Array(providers.prefix(4))
+        let tile: CGFloat = 44
+        let radius: CGFloat = 11
+        return HStack(alignment: .center, spacing: Theme.Spacing.m) {
+            Text("Disponible sur")
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Palette.textTertiary)
+            HStack(spacing: Theme.Spacing.s) {
+                ForEach(shown) { provider in
+                    ZStack {
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .fill(Color(white: 0.12).opacity(0.9))
+                        RemoteImage(url: provider.logoURL, maxPixel: 80, showsPlaceholder: false, contentMode: .fit)
+                            .padding(7)
+                    }
+                    .frame(width: tile, height: tile)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                    }
+                    .accessibilityLabel(provider.name)
+                }
+                if providers.count > shown.count {
+                    Text("+\(providers.count - shown.count)")
+                        .font(Theme.Typography.caption)
+                        .foregroundStyle(Theme.Palette.textTertiary)
+                }
+            }
         }
-    }
-
-    private func creditLine(_ label: String, _ value: String) -> some View {
-        (Text("\(label) : ").foregroundStyle(Theme.Palette.textTertiary) + Text(value).foregroundStyle(Theme.Palette.textSecondary))
-            .font(Theme.Typography.caption)
-            .lineLimit(1)
+        .accessibilityElement(children: .contain)
     }
 
     private var isUnavailable: Bool {
@@ -153,7 +176,7 @@ struct DetailView: View {
 
     private var actions: some View {
         HStack(spacing: Theme.Spacing.m) {
-            Button(resume?.resumeButtonTitle ?? "Lecture", systemImage: "play.fill") {
+            Button(resume?.resumeButtonTitle ?? model.primaryPlayTitle, systemImage: "play.fill") {
                 if isUnavailable && model.item.type == .movie {
                     sourcePicker = SourcePickerTarget(video: nil, videoID: model.summary.id, title: model.summary.name)
                 } else {
@@ -195,7 +218,7 @@ struct DetailView: View {
         case .unavailable(let notices, let totalCount):
             unavailableSummary(notices: notices, totalCount: totalCount)
         case .noAddons:
-            "Aucun add-on configuré"
+            "Bande-annonce indisponible — ajoutez un add-on pour lire"
         }
     }
 
@@ -228,40 +251,6 @@ struct DetailView: View {
     }
 
     // MARK: Distinctions
-
-    @ViewBuilder
-    private var heroDistinctionStrip: some View {
-        if let primary = model.distinctions.first {
-            let extra = model.distinctions.count - 1
-            HStack(spacing: Theme.Spacing.xs) {
-                Circle()
-                    .fill(primary.won ? Theme.Palette.rating : Theme.Palette.surfaceRaised)
-                    .frame(width: 22, height: 22)
-                    .overlay {
-                        Image(systemName: primary.won ? "trophy.fill" : "sparkles")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-
-                HStack(spacing: 6) {
-                    Text(primary.won
-                         ? "\(primary.shortCeremonyLabel) \(String(primary.year))"
-                         : "Nominé · \(primary.shortCeremonyLabel) \(String(primary.year))")
-                        .foregroundStyle(Theme.Palette.textPrimary)
-
-                    Text("· \(primary.category)")
-                        .foregroundStyle(Theme.Palette.textSecondary)
-                        .lineLimit(1)
-
-                    if extra > 0 {
-                        Text("· +\(extra)")
-                            .foregroundStyle(Theme.Palette.textTertiary)
-                    }
-                }
-                .font(Theme.Typography.meta)
-            }
-        }
-    }
 
     private var awardsSection: some View {
         ShelfRow("Distinctions", items: model.distinctions) { distinction in

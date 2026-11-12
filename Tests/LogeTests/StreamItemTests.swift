@@ -70,4 +70,15 @@ struct StreamItemTests {
         #expect(!torrent.isNotice)
         #expect(!torrent.isPlayable)
     }
+
+    @Test func youtubeTrailerIsPlayableAndNotANotice() {
+        let trailer = StreamItem.youtubeTrailer(
+            videoKey: "dQw4w9WgXcQ",
+            streamURL: URL(string: "https://googlevideo.test/v.mp4")!
+        )
+        #expect(trailer.isYouTubeTrailer)
+        #expect(trailer.isPlayable)
+        #expect(!trailer.isNotice)
+        #expect(trailer.playableURL?.host == "googlevideo.test")
+    }
 }

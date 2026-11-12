@@ -39,10 +39,48 @@ public struct DeviceSession: Decodable, Identifiable, Equatable, Sendable {
     public let id: String
     public let name: String
     public let model: String?
+    /// `"tv"` or `"browser"` from the Worker; missing on older rows → treat as TV.
+    public let kind: String?
     public let lastSeenAtMs: Double?
     public let isCurrent: Bool
 
     public var lastSeen: Date? { lastSeenAtMs.map { Date(timeIntervalSince1970: $0 / 1000) } }
+
+    /// Prefer API `kind`, but recover pre-migration rows labeled "Navigateur web" / Mac / etc.
+    public var isBrowser: Bool {
+        switch (kind ?? "").lowercased() {
+        case "browser": return true
+        case "tv":
+            // Older rows were stored as tv by default; recover obvious browser identities.
+            return Self.looksLikeBrowser(name: name, model: model)
+        default:
+            return Self.looksLikeBrowser(name: name, model: model)
+        }
+    }
+
+    /// SF Symbol for the device row (Mac browser ≠ Apple TV).
+    public var systemSymbol: String {
+        guard isBrowser else { return "appletv.fill" }
+        let model = (model ?? "").lowercased()
+        if model.contains("mac") { return "macbook" }
+        if model.contains("ipad") { return "ipad" }
+        if model.contains("iphone") || model.contains("ios") { return "iphone" }
+        if model.contains("windows") || model.contains("pc") { return "desktopcomputer" }
+        if model.contains("android") { return "smartphone" }
+        return "safari"
+    }
+
+    private static func looksLikeBrowser(name: String, model: String?) -> Bool {
+        let blob = "\(name) \(model ?? "")".lowercased()
+        return blob.contains("navigateur")
+            || blob.contains("browser")
+            || blob.contains("mac")
+            || blob.contains("windows")
+            || blob.contains("android")
+            || blob.contains("iphone")
+            || blob.contains("ipad")
+            || blob.range(of: #"\bpc\b"#, options: .regularExpression) != nil
+    }
 }
 
 /// Service d'authentification pour Loge sur tvOS.
@@ -75,6 +113,9 @@ public final class AuthService {
 
     /// Devices signed in to the account, for Settings. Empty until `refreshDevices()`.
     public private(set) var devices: [DeviceSession] = []
+    /// Household plan from the Worker (`free` until refresh).
+    public private(set) var plan: LogePlan = .free
+    public var limits: PlanLimits { PlanLimits.forPlan(plan) }
 
     // État de l'appairage en cours
     public private(set) var activePairingCode: String?
@@ -86,6 +127,13 @@ public final class AuthService {
     private let keychainService = "com.h6245.loge.auth"
 
     public init() {
+        // Drop legacy API host overrides (stremiotv-api worker is gone).
+        UserDefaults.standard.removeObject(forKey: "stremiotv.apiBaseURL")
+        if let override = UserDefaults.standard.string(forKey: "loge.apiBaseURL"),
+           override.contains("stremiotv-api") {
+            UserDefaults.standard.removeObject(forKey: "loge.apiBaseURL")
+        }
+
         let dismissed = UserDefaults.standard.object(forKey: Self.welcomeDismissedKey) != nil
             ? UserDefaults.standard.bool(forKey: Self.welcomeDismissedKey)
             : UserDefaults.standard.bool(forKey: "stremiotv.welcomeDismissed")
@@ -119,6 +167,7 @@ public final class AuthService {
     public func handleRevokedSession() {
         clearCredentials()
         devices = []
+        plan = .free
         wasSignedOutRemotely = true
         welcomeDismissed = false
         UserDefaults.standard.set(false, forKey: Self.welcomeDismissedKey)
@@ -131,6 +180,7 @@ public final class AuthService {
         let identity = DeviceIdentity.current
         req.setValue(identity.name, forHTTPHeaderField: "X-Device-Name")
         req.setValue(identity.model, forHTTPHeaderField: "X-Device-Model")
+        req.setValue("tv", forHTTPHeaderField: "X-Client-Kind")
         guard let (data, response) = try? await URLSession.shared.data(for: req),
               let status = (response as? HTTPURLResponse)?.statusCode else { return }
         if status == 401 {
@@ -140,12 +190,16 @@ public final class AuthService {
         struct Payload: Decodable {
             let devices: [DeviceSession]
             let token: String?
+            let plan: LogePlan?
         }
         if status == 200, let payload = try? JSONDecoder().decode(Payload.self, from: data) {
             if let newToken = payload.token {
                 adoptUpgradedToken(newToken)
             }
             devices = payload.devices
+            if let plan = payload.plan {
+                self.plan = plan
+            }
         }
     }
 
@@ -204,8 +258,36 @@ public final class AuthService {
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
             "password": password,
             "deviceName": device.name,
-            "deviceModel": device.model
+            "deviceModel": device.model,
+            "clientKind": "tv"
         ]
+    }
+
+    /// Posts a StoreKit 2 transaction JWS so the Worker can set `accounts.plan`.
+    public func reportApplePurchase(jwsRepresentation: String) async throws {
+        guard let token, let url = URL(string: "\(apiBaseURL)/api/billing/apple") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("tv", forHTTPHeaderField: "X-Client-Kind")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["signedTransaction": jwsRepresentation])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        if status == 401 {
+            handleRevokedSession()
+            throw URLError(.userAuthenticationRequired)
+        }
+        guard status == 200 else {
+            let message = json?["error"] as? String ?? "Achat non enregistré (\(status))"
+            throw NSError(domain: "AuthService", code: status, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+        if let planRaw = json?["plan"] as? String, let plan = LogePlan(rawValue: planRaw) {
+            self.plan = plan
+        }
     }
 
     // MARK: - Device Flow (Jumelage par QR Code)
@@ -286,6 +368,7 @@ public final class AuthService {
     // MARK: - Déconnexion
 
     /// Signs out here and, best effort, closes this device's session so it leaves the account's device list.
+    /// Callers must also clear local household data (`CloudSyncEngine.clearLocalHousehold`).
     public func logout() {
         if let token, let url = URL(string: "\(apiBaseURL)/api/auth/logout") {
             var req = URLRequest(url: url)
@@ -295,6 +378,30 @@ public final class AuthService {
         }
         clearCredentials()
         devices = []
+        plan = .free
+    }
+
+    /// Deletes the cloud account and every cascaded row (profiles, lists, progress, sessions, addons).
+    /// Callers must also clear local household data (`CloudSyncEngine.clearLocalHousehold`).
+    public func deleteAccount() async throws {
+        guard let token else { throw URLError(.userAuthenticationRequired) }
+        guard let url = URL(string: "\(apiBaseURL)/api/auth/delete-account") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (_, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw NSError(
+                domain: "AuthService",
+                code: (response as? HTTPURLResponse)?.statusCode ?? -1,
+                userInfo: [NSLocalizedDescriptionKey: "Impossible de supprimer le compte."]
+            )
+        }
+        clearCredentials()
+        devices = []
+        plan = .free
     }
 
     private func clearCredentials() {

@@ -14,9 +14,10 @@ import {
   readToken,
   limitsFor,
   effectivePlan,
+  inferSessionKind,
   MIN_PASSWORD_LENGTH,
 } from './shared.ts';
-import type { Env, LogePlan, PlanLimits } from './shared.ts';
+import type { Env, LogePlan, PlanLimits, SessionKind } from './shared.ts';
 
 export type { Env } from './shared.ts';
 
@@ -61,8 +62,6 @@ function cleanLabel(value: unknown, fallback: string): string {
   return text || fallback;
 }
 
-type SessionKind = 'tv' | 'browser';
-
 function rankPlan(plan: LogePlan): number {
   switch (plan) {
     case 'ultra': return 2;
@@ -106,7 +105,6 @@ function resolveSessionKind(request: Request, explicit?: unknown): SessionKind {
   return 'browser';
 }
 
-/** Recover browser sessions created before device_kind existed (null → wrongly shown as TV). */
 /** Web uses lowercase UUIDs; tvOS `uuidString` is uppercase. D1 UNIQUE is case-sensitive → duplicates. */
 function normalizeProfileId(id: unknown): string | null {
   if (typeof id !== 'string') return null;
@@ -188,25 +186,6 @@ async function canonicalizeAddons(env: Env, accountId: string): Promise<string[]
     canonical.push(norm);
   }
   return canonical;
-}
-
-function inferSessionKind(kind: unknown, name: unknown, model: unknown): SessionKind {
-  const k = typeof kind === 'string' ? kind.toLowerCase() : '';
-  if (k === 'browser' || k === 'tv') return k;
-  const blob = `${name || ''} ${model || ''}`.toLowerCase();
-  if (
-    blob.includes('navigateur') ||
-    blob.includes('browser') ||
-    blob.includes('mac') ||
-    blob.includes('windows') ||
-    blob.includes('android') ||
-    blob.includes('iphone') ||
-    blob.includes('ipad') ||
-    /\bpc\b/.test(blob)
-  ) {
-    return 'browser';
-  }
-  return 'tv';
 }
 
 async function accountPlan(env: Env, accountId: string): Promise<{ plan: LogePlan; limits: PlanLimits; expiresAtMs: number | null }> {

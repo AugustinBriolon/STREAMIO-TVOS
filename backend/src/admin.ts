@@ -4,11 +4,51 @@
  * account API rejects any token that has a role.
  */
 
-import { json, sha256, hashPassword, signToken, readToken, parsePlan, effectivePlan, limitsFor, MIN_PASSWORD_LENGTH } from './shared.ts';
+import { json, sha256, hashPassword, signToken, readToken, parsePlan, effectivePlan, limitsFor, inferSessionKind, MIN_PASSWORD_LENGTH } from './shared.ts';
 import type { Env } from './shared.ts';
 
 const ADMIN_TOKEN_TTL_S = 8 * 60 * 60;
 const ACCOUNT_LIST_LIMIT = 200;
+const LOGIN_MAX_FAILS = 5;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const RECENT_REVOKE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Isolate-local gate. Survives successive requests on a warm Worker; resets on cold start. */
+const loginGate = new Map<string, { fails: number; lockedUntilMs: number }>();
+
+/** Test hook: worker tests share one isolate and must not leak lockouts across cases. */
+export function resetAdminLoginGate(): void {
+  loginGate.clear();
+}
+
+function clientKey(request: Request): string {
+  return (
+    request.headers.get('CF-Connecting-IP') ||
+    request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+    'unknown'
+  );
+}
+
+function loginLocked(key: string, now = Date.now()): number {
+  const row = loginGate.get(key);
+  if (!row || row.lockedUntilMs <= now) return 0;
+  return row.lockedUntilMs - now;
+}
+
+function noteLoginFailure(key: string, now = Date.now()): number {
+  const row = loginGate.get(key) || { fails: 0, lockedUntilMs: 0 };
+  row.fails += 1;
+  if (row.fails >= LOGIN_MAX_FAILS) {
+    row.lockedUntilMs = now + LOGIN_LOCK_MS;
+    row.fails = 0;
+  }
+  loginGate.set(key, row);
+  return Math.max(0, row.lockedUntilMs - now);
+}
+
+function clearLoginFailures(key: string): void {
+  loginGate.delete(key);
+}
 
 /** Compares digests so the response time does not reveal how much of the password matched. */
 async function passwordMatches(candidate: string, expected: string): Promise<boolean> {
@@ -29,12 +69,44 @@ function audit(action: string, accountId: string, detail: Record<string, unknown
   console.log(JSON.stringify({ audit: 'admin', action, accountId, ...detail, atMs: Date.now() }));
 }
 
+function mapDevice(d: any, revoked = false) {
+  return {
+    id: d.id,
+    name: d.display_name || d.device_name,
+    model: d.device_model || null,
+    kind: inferSessionKind(d.device_kind, d.display_name || d.device_name, d.device_model),
+    createdAtMs: d.created_at_ms,
+    lastSeenAtMs: d.last_seen_at_ms,
+    ...(revoked ? { revokedAtMs: d.revoked_at_ms } : {}),
+  };
+}
+
 async function login(request: Request, env: Env): Promise<Response> {
+  const key = clientKey(request);
+  const remaining = loginLocked(key);
+  if (remaining > 0) {
+    const retryAfter = Math.ceil(remaining / 1000);
+    audit('login_locked', '-', { retryAfterS: retryAfter });
+    return json(
+      { error: `Trop de tentatives. Réessayez dans ${Math.ceil(retryAfter / 60)} min.`, retryAfterS: retryAfter },
+      429
+    );
+  }
+
   const { password } = (await request.json().catch(() => ({}))) as any;
   if (typeof password !== 'string' || !(await passwordMatches(password, env.ADMIN_PASSWORD!))) {
+    const lockMs = noteLoginFailure(key);
     console.log(JSON.stringify({ audit: 'admin', action: 'login_failed', atMs: Date.now() }));
+    if (lockMs > 0) {
+      const retryAfter = Math.ceil(lockMs / 1000);
+      return json(
+        { error: `Trop de tentatives. Réessayez dans ${Math.ceil(retryAfter / 60)} min.`, retryAfterS: retryAfter },
+        429
+      );
+    }
     return json({ error: 'Mot de passe administrateur incorrect.' }, 401);
   }
+  clearLoginFailures(key);
   const now = Math.floor(Date.now() / 1000);
   const exp = now + ADMIN_TOKEN_TTL_S;
   audit('login', '-');
@@ -96,7 +168,8 @@ async function findAccount(env: Env, id: unknown): Promise<any | null> {
 async function accountDetail(env: Env, id: string | null): Promise<Response> {
   const account = await findAccount(env, id);
   if (!account) return json({ error: 'Compte introuvable.' }, 404);
-  const [profiles, devices, addons] = await Promise.all([
+  const since = Date.now() - RECENT_REVOKE_MS;
+  const [profiles, devices, revoked, addons] = await Promise.all([
     env.DB.prepare(
       'SELECT lower(id) AS id, MAX(name) AS name, MAX(avatar_json) AS avatar_json FROM profiles WHERE account_id = ? GROUP BY lower(id) ORDER BY MIN(sort_order)'
     ).bind(account.id).all(),
@@ -104,9 +177,18 @@ async function accountDetail(env: Env, id: string | null): Promise<Response> {
       `SELECT id, device_name, display_name, device_model, device_kind, created_at_ms, last_seen_at_ms
        FROM sessions WHERE account_id = ? AND revoked_at_ms IS NULL ORDER BY last_seen_at_ms DESC`
     ).bind(account.id).all(),
+    env.DB.prepare(
+      `SELECT id, device_name, display_name, device_model, device_kind, created_at_ms, last_seen_at_ms, revoked_at_ms
+       FROM sessions WHERE account_id = ? AND revoked_at_ms IS NOT NULL AND revoked_at_ms > ?
+       ORDER BY revoked_at_ms DESC LIMIT 5`
+    ).bind(account.id, since).all(),
     env.DB.prepare('SELECT manifest_url FROM addons WHERE account_id = ? ORDER BY installed_at ASC').bind(account.id).all(),
   ]);
   const plan = effectivePlan(account.plan, account.plan_expires_at_ms);
+  const limits = limitsFor(plan);
+  const activeDevices = (devices.results as any[]).map((d) => mapDevice(d));
+  const tvCount = activeDevices.filter((d) => d.kind === 'tv').length;
+  const browserCount = activeDevices.filter((d) => d.kind === 'browser').length;
   return json({
     id: account.id,
     email: account.email,
@@ -114,17 +196,17 @@ async function accountDetail(env: Env, id: string | null): Promise<Response> {
     plan,
     planExpiresAtMs: account.plan_expires_at_ms ?? null,
     planSource: account.plan_product_id || null,
-    limits: limitsFor(plan),
+    limits,
+    usage: {
+      profiles: (profiles.results as any[]).length,
+      addons: (addons.results as any[]).length,
+      tv: tvCount,
+      browser: browserCount,
+    },
     createdAt: account.created_at,
     profiles: profiles.results,
-    devices: (devices.results as any[]).map((d) => ({
-      id: d.id,
-      name: d.display_name || d.device_name,
-      model: d.device_model || null,
-      kind: d.device_kind === 'browser' ? 'browser' : 'tv',
-      createdAtMs: d.created_at_ms,
-      lastSeenAtMs: d.last_seen_at_ms,
-    })),
+    devices: activeDevices,
+    recentlyRevoked: (revoked.results as any[]).map((d) => mapDevice(d, true)),
     addons: (addons.results as any[]).map((a) => a.manifest_url),
   });
 }

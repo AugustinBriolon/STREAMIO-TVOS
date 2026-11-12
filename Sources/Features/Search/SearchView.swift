@@ -25,7 +25,7 @@ struct SearchView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            .opensRailOnExit()
+            .opensRailOnExit(when: path.isEmpty)
             .searchable(text: $model.query, prompt: "Films, séries…")
             .navigationDestination(for: MediaItem.self) { DetailView(item: $0) }
             .navigationDestination(for: CastMember.self) { PersonDetailView(member: $0) }

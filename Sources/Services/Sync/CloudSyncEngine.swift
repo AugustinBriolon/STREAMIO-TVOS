@@ -48,15 +48,29 @@ public final class CloudSyncEngine {
         isSyncing = true
         syncError = nil
 
+        // Plan is not persisted locally (defaults to free until the Worker answers). Refresh first
+        // or a cold launch always skips cloud pull — including addons added on the web.
+        await auth.refreshDevices()
+        profiles.plan = auth.plan
+        addons.plan = auth.plan
+
+        guard auth.limits.cloudSync else {
+            isSyncing = false
+            return
+        }
+
         do {
-            try await pull(token: token)
-            // Pull may have replaced a legacy JWT with a session-bound one; push must use that.
+            // Prefer the session token refreshDevices may have upgraded.
+            let syncToken = auth.token ?? token
+            try await pull(token: syncToken)
             if let pushToken = auth.token {
                 try await push(token: pushToken)
                 let now = Date()
                 lastSyncDate = now
                 defaults.set(now, forKey: "loge.lastSyncDate")
             }
+            profiles.plan = auth.plan
+            addons.plan = auth.plan
         } catch is SessionRevoked {
             // Signed out from another device: stop syncing, keep every local profile and history.
             auth.handleRevokedSession()
@@ -89,6 +103,10 @@ public final class CloudSyncEngine {
         if let upgraded = json["token"] as? String {
             auth.adoptUpgradedToken(upgraded)
         }
+        if let planRaw = json["plan"] as? String, let plan = LogePlan(rawValue: planRaw) {
+            profiles.plan = plan
+            addons.plan = plan
+        }
 
         let decoder = JSONDecoder()
 
@@ -116,9 +134,10 @@ public final class CloudSyncEngine {
                 }
                 parsedProfiles.append(Profile(id: id, name: name, avatar: avatar))
             }
-            // A device signing in for the first time takes the account's profiles instead of adding its
-            // empty "Profil 1" next to them.
-            if !parsedProfiles.isEmpty, profiles.isUntouchedDefault, library.myList.isEmpty, library.allProgress.isEmpty {
+            // Joining a foyer with an empty guest "Profil 1" takes the account roster — never upload
+            // that placeholder as a new household profile (merge + push looked like "auto-create").
+            let localLibraryEmpty = library.myList.isEmpty && library.allProgress.isEmpty
+            if !parsedProfiles.isEmpty, profiles.shouldAdoptAccountProfiles, localLibraryEmpty {
                 profiles.adoptRemote(parsedProfiles)
                 library.switchProfile(to: profiles.activeID)
             } else if !parsedProfiles.isEmpty {
@@ -262,8 +281,9 @@ public final class CloudSyncEngine {
         // 1. Profils
         var profilesPayload: [[String: Any]] = []
         for (index, p) in profiles.profiles.enumerated() {
+            // Lowercase: D1 UNIQUE(account_id, id) is case-sensitive; web already stores lowercase.
             profilesPayload.append([
-                "id": p.id.uuidString,
+                "id": p.id.uuidString.lowercased(),
                 "name": p.name,
                 "avatar": [
                     "color": p.avatar.color.rawValue,
@@ -293,7 +313,7 @@ public final class CloudSyncEngine {
                 if let entryData = try? encoder.encode(entry),
                    let entryJsonStr = String(data: entryData, encoding: .utf8) {
                     progressPayload.append([
-                        "profileId": p.id.uuidString,
+                        "profileId": p.id.uuidString.lowercased(),
                         "videoId": entry.id,
                         "item": entryJsonStr,
                         "position": entry.position,
@@ -305,7 +325,7 @@ public final class CloudSyncEngine {
 
             for (videoId, deletedAt) in deletedMap {
                 deletedProgressPayload.append([
-                    "profileId": p.id.uuidString,
+                    "profileId": p.id.uuidString.lowercased(),
                     "videoId": videoId,
                     "deletedAtMs": Self.milliseconds(from: deletedAt)
                 ])
@@ -338,7 +358,7 @@ public final class CloudSyncEngine {
                     let addedAt = (p.id == library.profileID ? library.myListAddedAt(for: item.id) : timestamps[item.id])
                         ?? Date(timeIntervalSince1970: 0)
                     myListPayload.append([
-                        "profileId": p.id.uuidString,
+                        "profileId": p.id.uuidString.lowercased(),
                         "itemId": item.id,
                         "item": itemJsonStr,
                         "addedAtMs": Self.milliseconds(from: addedAt)
@@ -348,7 +368,7 @@ public final class CloudSyncEngine {
 
             for (itemId, deletedAt) in deletedMap {
                 deletedMyListPayload.append([
-                    "profileId": p.id.uuidString,
+                    "profileId": p.id.uuidString.lowercased(),
                     "itemId": itemId,
                     "deletedAtMs": Self.milliseconds(from: deletedAt)
                 ])
@@ -361,7 +381,7 @@ public final class CloudSyncEngine {
         // 5. Profils supprimés
         let reportedDeletions = profiles.deletedProfiles
         let deletedProfilesPayload: [[String: Any]] = reportedDeletions.map { id, date in
-            ["id": id.uuidString, "deletedAtMs": Self.milliseconds(from: date)]
+            ["id": id.uuidString.lowercased(), "deletedAtMs": Self.milliseconds(from: date)]
         }
 
         let body: [String: Any] = [
@@ -417,6 +437,7 @@ public final class CloudSyncEngine {
         let device = DeviceIdentity.current
         request.setValue(device.name, forHTTPHeaderField: "X-Device-Name")
         request.setValue(device.model, forHTTPHeaderField: "X-Device-Model")
+        request.setValue("tv", forHTTPHeaderField: "X-Client-Kind")
     }
 
     private static func date(fromMilliseconds value: Any?) -> Date? {
@@ -516,5 +537,23 @@ public final class CloudSyncEngine {
         let encoder = JSONEncoder()
         if let d = try? encoder.encode(Array(dict.values)) { defaults.set(d, forKey: progKey) }
         if let d = try? encoder.encode(deletions) { defaults.set(d, forKey: delKey) }
+    }
+
+    // MARK: - Logout
+
+    /// Intentional sign-out / account deletion: drop synced household data so the next login starts clean.
+    /// Remote revoke keeps local data on purpose — do not call this from `handleRevokedSession`.
+    public func clearLocalHousehold() {
+        debounceTask?.cancel()
+        debounceTask = nil
+        isSyncing = false
+        syncError = nil
+        lastSyncDate = nil
+        defaults.removeObject(forKey: "loge.lastSyncDate")
+        defaults.removeObject(forKey: "stremiotv.lastSyncDate")
+
+        profiles.resetToGuest()
+        library.adoptProfile(profiles.activeID)
+        addons.resetToDefaults()
     }
 }

@@ -13,7 +13,7 @@ public enum ProfileError: LocalizedError, Equatable {
         case .emptyName: return "Donnez un nom au profil."
         case .nameTooLong: return "Le nom est trop long (\(ProfileStore.maxNameLength) caractères maximum)."
         case .duplicateName: return "Un profil porte déjà ce nom."
-        case .limitReached: return "Vous ne pouvez pas avoir plus de \(ProfileStore.maxProfiles) profils."
+        case .limitReached: return "Limite de profils atteinte pour votre offre."
         case .lastProfile: return "Au moins un profil est nécessaire."
         }
     }
@@ -24,6 +24,7 @@ public enum ProfileError: LocalizedError, Equatable {
 @MainActor
 @Observable
 public final class ProfileStore {
+    /// Absolute ceiling (Ultra). Prefer `PlanLimits.forPlan(plan).maxProfiles` for the active offer.
     public nonisolated static let maxProfiles = 6
     public nonisolated static let maxNameLength = 16
 
@@ -34,13 +35,20 @@ public final class ProfileStore {
     /// The first-launch "Profil 1", never renamed and never joined by another profile: an account's
     /// profiles replace it instead of being added next to it.
     public private(set) var isUntouchedDefault: Bool
-    /// Bumped when the account's profiles replaced the local default, so the app can ask who is watching.
+    /// Bumped when the UI must show « Qui regarde ? » (login, or account profiles replacing the guest).
     public private(set) var adoptionCount = 0
+    /// Household plan; defaults to Free until AuthService refreshes the account plan.
+    public var plan: LogePlan = .free
+
+    /// Empty guest placeholder that must not be uploaded next to the account's real profiles.
+    public var shouldAdoptAccountProfiles: Bool {
+        isUntouchedDefault || (profiles.count == 1 && profiles[0].name == "Profil 1")
+    }
 
     @ObservationIgnored private let defaults: UserDefaults
 
     public var active: Profile { profiles.first { $0.id == activeID } ?? profiles[0] }
-    public var canAdd: Bool { profiles.count < Self.maxProfiles }
+    public var canAdd: Bool { PlanLimits.forPlan(plan).canAddProfile(currentCount: profiles.count) }
 
     /// Loads the stored profiles. The first run creates "Profil 1" and copies the pre-profile list and
     /// progress (standard defaults) into it, so nothing watched before profiles existed is lost.
@@ -99,6 +107,26 @@ public final class ProfileStore {
     public func select(_ id: UUID) {
         guard profiles.contains(where: { $0.id == id }), id != activeID else { return }
         activeID = id
+        persist()
+    }
+
+    /// Ask RootView to open « Qui regarde ? » after a successful account connection.
+    public func requestProfilePicker() {
+        adoptionCount += 1
+    }
+
+    /// Wipes every local profile (and its library keys) and recreates an untouched "Profil 1".
+    /// Used on intentional logout / account deletion so the next session cannot inherit the foyer.
+    public func resetToGuest(makeID: () -> UUID = UUID.init) {
+        for profile in profiles {
+            LibraryStore.erase(profileID: profile.id, from: defaults)
+        }
+        let first = Profile(id: makeID(), name: "Profil 1", avatar: .suggested(avoiding: []))
+        profiles = [first]
+        activeID = first.id
+        deletedProfiles = [:]
+        isUntouchedDefault = true
+        plan = .free
         persist()
     }
 

@@ -204,6 +204,23 @@ public struct MetaDetailResponse: Codable {
     public let meta: MediaDetail
 }
 
+/// Plateforme SVOD/AVOD (JustWatch via TMDB) pour la façade « où regarder ».
+public struct WatchProvider: Codable, Identifiable, Hashable, Sendable {
+    public let id: Int
+    public let name: String
+    public let logoPath: String?
+
+    public init(id: Int, name: String, logoPath: String? = nil) {
+        self.id = id
+        self.name = name
+        self.logoPath = logoPath
+    }
+
+    public var logoURL: URL? {
+        logoPath.flatMap { URL(string: "https://image.tmdb.org/t/p/w92\($0)") }
+    }
+}
+
 public struct MediaDetail: Codable, Identifiable, Sendable, ArtworkProviding {
     public let id: String
     public let name: String
@@ -220,6 +237,7 @@ public struct MediaDetail: Codable, Identifiable, Sendable, ArtworkProviding {
     public let director: [String]?
     public let videos: [VideoItem]?
     public let castMembers: [CastMember]?
+    public let watchProviders: [WatchProvider]?
 
     public init(
         id: String, name: String, type: MediaType,
@@ -227,7 +245,8 @@ public struct MediaDetail: Codable, Identifiable, Sendable, ArtworkProviding {
         description: String? = nil, releaseInfo: String? = nil, runtime: String? = nil,
         imdbRating: String? = nil, genres: [String]? = nil,
         cast: [String]? = nil, director: [String]? = nil, videos: [VideoItem]? = nil,
-        castMembers: [CastMember]? = nil
+        castMembers: [CastMember]? = nil,
+        watchProviders: [WatchProvider]? = nil
     ) {
         self.id = id
         self.name = name
@@ -244,6 +263,7 @@ public struct MediaDetail: Codable, Identifiable, Sendable, ArtworkProviding {
         self.director = director
         self.videos = videos
         self.castMembers = castMembers
+        self.watchProviders = watchProviders
     }
 
     /// Catalog-level summary, used for library persistence and navigation.

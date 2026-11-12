@@ -12,6 +12,7 @@ struct AppPreferencesTests {
         #expect(prefs.preferredAudioLanguage == "fr")
         #expect(prefs.subtitleMode == .auto)
         #expect(prefs.preferredSubtitleLanguage == "fr")
+        #expect(prefs.showWatchProviders == true)
         #expect(prefs.effectiveTMDBKey == AppPreferences.tmdbApiKey)
     }
 
@@ -24,6 +25,7 @@ struct AppPreferencesTests {
         prefs1.preferredAudioLanguage = "en"
         prefs1.subtitleMode = .alwaysOn
         prefs1.preferredSubtitleLanguage = "es"
+        prefs1.showWatchProviders = false
 
         let defaults2 = UserDefaults(suiteName: suite)!
         let prefs2 = AppPreferences(defaults: defaults2)
@@ -32,6 +34,7 @@ struct AppPreferencesTests {
         #expect(prefs2.preferredAudioLanguage == "en")
         #expect(prefs2.subtitleMode == .alwaysOn)
         #expect(prefs2.preferredSubtitleLanguage == "es")
+        #expect(prefs2.showWatchProviders == false)
     }
 
     @Test func tmdbLanguageCodeFormatting() {

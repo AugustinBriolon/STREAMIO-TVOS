@@ -26,9 +26,9 @@ public protocol StremioProviding: Sendable {
     // MARK: - Découverte & Catégories enrichies
     func fetchNowPlaying(language: String, region: String) async -> [MediaItem]
     func fetchTrending(type: MediaType, period: String, language: String) async -> [MediaItem]
-    func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String) async -> [MediaItem]
-    func fetchByCompany(companyID: Int, language: String) async -> [MediaItem]
-    func fetchByNetwork(networkID: Int, language: String) async -> [MediaItem]
+    func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String, page: Int) async -> DiscoverPage
+    func fetchByCompany(companyID: Int, language: String, page: Int) async -> DiscoverPage
+    func fetchByNetwork(networkID: Int, language: String, page: Int) async -> DiscoverPage
     func fetchCollection(collectionID: Int, language: String) async -> SagaCollection?
     func fetchCuratedTitles(tmdbIDs: [Int], type: MediaType, language: String) async -> [MediaItem]
 }
@@ -44,9 +44,15 @@ public extension StremioProviding {
 
     func fetchNowPlaying(language: String, region: String) async -> [MediaItem] { [] }
     func fetchTrending(type: MediaType, period: String, language: String) async -> [MediaItem] { [] }
-    func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String) async -> [MediaItem] { [] }
-    func fetchByCompany(companyID: Int, language: String) async -> [MediaItem] { [] }
-    func fetchByNetwork(networkID: Int, language: String) async -> [MediaItem] { [] }
+    func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String, page: Int) async -> DiscoverPage {
+        DiscoverPage(items: [], page: page, totalPages: 1)
+    }
+    func fetchByCompany(companyID: Int, language: String, page: Int) async -> DiscoverPage {
+        DiscoverPage(items: [], page: page, totalPages: 1)
+    }
+    func fetchByNetwork(networkID: Int, language: String, page: Int) async -> DiscoverPage {
+        DiscoverPage(items: [], page: page, totalPages: 1)
+    }
     func fetchCollection(collectionID: Int, language: String) async -> SagaCollection? { nil }
     func fetchCuratedTitles(tmdbIDs: [Int], type: MediaType, language: String) async -> [MediaItem] { [] }
 }
@@ -55,10 +61,12 @@ public struct StremioService: StremioProviding {
     private let cinemetaBase = "https://v3-cinemeta.strem.io"
     private let session: URLSession
     private let tmdbService: TMDBService
+    private let youtubeResolver: YouTubeStreamResolver
 
     public init(session: URLSession = .shared) {
         self.session = session
         self.tmdbService = TMDBService(session: session)
+        self.youtubeResolver = YouTubeStreamResolver(session: session)
     }
 
     public func fetchCatalog(type: MediaType, genre: String?) async throws -> [MediaItem] {
@@ -150,7 +158,8 @@ public struct StremioService: StremioProviding {
                 cast: castNames,
                 director: enriched.directors ?? cinemeta.director,
                 videos: updatedVideos,
-                castMembers: enriched.castMembers.isEmpty ? Self.fallbackCastMembers(from: cinemeta.cast) : enriched.castMembers
+                castMembers: enriched.castMembers.isEmpty ? Self.fallbackCastMembers(from: cinemeta.cast) : enriched.castMembers,
+                watchProviders: enriched.watchProviders.isEmpty ? nil : enriched.watchProviders
             )
         }
 
@@ -225,6 +234,13 @@ public struct StremioService: StremioProviding {
             let credits = json["credits"] as? [String: Any]
             let castArr = (credits?["cast"] as? [[String: Any]])?.compactMap { $0["name"] as? String }
 
+            let region = TMDBService.watchRegion(for: language)
+            let providersEnabled = await MainActor.run { AppPreferences.shared.showWatchProviders }
+            let providers = providersEnabled
+                ? await tmdbService.fetchWatchProviders(
+                    tmdbID: tmdbID, type: .series, region: region, apiKey: apiKey
+                )
+                : []
             return MediaDetail(
                 id: id,
                 name: title,
@@ -240,7 +256,8 @@ public struct StremioService: StremioProviding {
                 cast: castArr,
                 director: nil,
                 videos: [],
-                castMembers: []
+                castMembers: [],
+                watchProviders: providers.isEmpty ? nil : providers
             )
         } else {
             let urlStr = "https://api.themoviedb.org/3/movie/\(tmdbID)?api_key=\(apiKey)&language=\(lang)&append_to_response=credits"
@@ -265,6 +282,13 @@ public struct StremioService: StremioProviding {
             let castArr = (credits?["cast"] as? [[String: Any]])?.compactMap { $0["name"] as? String }
             let crewArr = credits?["crew"] as? [[String: Any]]
             let directors = crewArr?.filter { ($0["job"] as? String) == "Director" }.compactMap { $0["name"] as? String }
+            let region = TMDBService.watchRegion(for: language)
+            let providersEnabled = await MainActor.run { AppPreferences.shared.showWatchProviders }
+            let providers = providersEnabled
+                ? await tmdbService.fetchWatchProviders(
+                    tmdbID: tmdbID, type: .movie, region: region, apiKey: apiKey
+                )
+                : []
 
             return MediaDetail(
                 id: id,
@@ -281,7 +305,8 @@ public struct StremioService: StremioProviding {
                 cast: castArr,
                 director: directors,
                 videos: nil,
-                castMembers: []
+                castMembers: [],
+                watchProviders: providers.isEmpty ? nil : providers
             )
         }
     }
@@ -297,7 +322,7 @@ public struct StremioService: StremioProviding {
             }
         }
 
-        return await withTaskGroup(of: (Int, [StreamItem]).self) { group in
+        let fromAddons: [StreamItem] = await withTaskGroup(of: (Int, [StreamItem]).self) { group in
             for (index, base) in addonBaseURLs.enumerated() {
                 group.addTask {
                     let response: StreamsResponse? = try? await get("\(base)/stream/\(type.rawValue)/\(canonicalID).json", timeout: 15)
@@ -309,6 +334,44 @@ public struct StremioService: StremioProviding {
             // Keep the user's addon order so it acts as a tie-breaker in ranking.
             return byAddon.sorted { $0.0 < $1.0 }.flatMap(\.1)
         }
+
+        let trailers: [StreamItem]
+        if PlaybackSourcePolicy.hasPersonalAddons(addonBaseURLs) {
+            trailers = []
+        } else {
+            trailers = await makeYouTubeTrailers(type: type, videoID: canonicalID)
+        }
+        return PlaybackSourcePolicy.streams(addonURLs: addonBaseURLs, fromAddons: fromAddons, trailers: trailers)
+    }
+
+    /// Episode ids (`tt…:s:e`) resolve the show trailer; movies use the title id as-is.
+    /// TMDB gives the YouTube id; InnerTube resolves adaptive (+ progressive fallback) for in-app VLC.
+    private func makeYouTubeTrailers(type: MediaType, videoID: String) async -> [StreamItem] {
+        let titleID: String = {
+            if videoID.hasPrefix("tt") {
+                let head = videoID.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? videoID
+                return head
+            }
+            return videoID
+        }()
+        let (apiKey, language) = await MainActor.run {
+            (AppPreferences.shared.effectiveTMDBKey, AppPreferences.shared.metadataLanguage)
+        }
+        guard let key = await tmdbService.fetchYouTubeTrailerKey(
+            id: titleID,
+            type: type,
+            language: language,
+            apiKey: apiKey
+        ),
+              let resolved = await youtubeResolver.resolve(videoKey: key, preferredLanguage: language) else {
+            return []
+        }
+        var items = [StreamItem.youtubeTrailer(videoKey: key, streamURL: resolved.videoURL, audioURL: resolved.audioURL)]
+        if let fallback = resolved.progressiveFallbackURL,
+           fallback.absoluteString != resolved.videoURL.absoluteString {
+            items.append(.youtubeTrailer(videoKey: key, streamURL: fallback, audioURL: nil))
+        }
+        return items
     }
 
     public func fetchPerson(personID: Int, language: String) async -> PersonDetail? {
@@ -326,19 +389,19 @@ public struct StremioService: StremioProviding {
         return await tmdbService.fetchTrending(type: type, period: period, language: language, apiKey: key)
     }
 
-    public func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String = "FR") async -> [MediaItem] {
+    public func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String = "FR", page: Int = 1) async -> DiscoverPage {
         let key = await AppPreferences.shared.effectiveTMDBKey
-        return await tmdbService.fetchByWatchProvider(type: type, providerID: providerID, language: language, region: region, apiKey: key)
+        return await tmdbService.fetchByWatchProvider(type: type, providerID: providerID, language: language, region: region, page: page, apiKey: key)
     }
 
-    public func fetchByCompany(companyID: Int, language: String) async -> [MediaItem] {
+    public func fetchByCompany(companyID: Int, language: String, page: Int = 1) async -> DiscoverPage {
         let key = await AppPreferences.shared.effectiveTMDBKey
-        return await tmdbService.fetchByCompany(companyID: companyID, language: language, apiKey: key)
+        return await tmdbService.fetchByCompany(companyID: companyID, language: language, page: page, apiKey: key)
     }
 
-    public func fetchByNetwork(networkID: Int, language: String) async -> [MediaItem] {
+    public func fetchByNetwork(networkID: Int, language: String, page: Int = 1) async -> DiscoverPage {
         let key = await AppPreferences.shared.effectiveTMDBKey
-        return await tmdbService.fetchByNetwork(networkID: networkID, language: language, apiKey: key)
+        return await tmdbService.fetchByNetwork(networkID: networkID, language: language, page: page, apiKey: key)
     }
 
     public func fetchCollection(collectionID: Int, language: String) async -> SagaCollection? {
