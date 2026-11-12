@@ -3,42 +3,26 @@
  * Handles Authentication, Device Flow Pairing (QR Code), and Multi-Device Cloud Sync.
  */
 
-import { renderWebPortal } from './pages/web-portal';
-import { privacyPolicyHTML, supportHTML } from './pages/legal';
+import { renderWebPortal } from './pages/web-portal.ts';
+import { renderAdminPortal } from './pages/admin-portal.ts';
+import { privacyPolicyHTML, supportHTML } from './pages/legal.ts';
+import { handleAdminApi } from './admin.ts';
+import {
+  json,
+  hashPassword,
+  signToken,
+  readToken,
+  limitsFor,
+  effectivePlan,
+  MIN_PASSWORD_LENGTH,
+} from './shared.ts';
+import type { Env, LogePlan, PlanLimits } from './shared.ts';
 
-export interface Env {
-  DB: D1Database;
-  JWT_SECRET: string;
-}
-
-// Helpers crypto natifs Web Crypto (compatibles Cloudflare Workers sans dépendance lourde)
-async function hashPassword(password: string): Promise<string> {
-  const enc = new TextEncoder();
-  const digest = await crypto.subtle.digest('SHA-256', enc.encode(password + 'stremiotv_salt'));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+export type { Env } from './shared.ts';
 
 async function generateToken(accountId: string, secret: string, sessionId: string): Promise<string> {
-  const payload = {
-    sub: accountId,
-    sid: sessionId,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365, // 1 an
-  };
-  const str = btoa(JSON.stringify(payload));
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, enc.encode(str));
-  const sigStr = btoa(String.fromCharCode(...new Uint8Array(signature)));
-  return `${str}.${sigStr}`;
+  const now = Math.floor(Date.now() / 1000);
+  return signToken({ sub: accountId, sid: sessionId, iat: now, exp: now + 60 * 60 * 24 * 365 }, secret);
 }
 
 interface TokenClaims {
@@ -48,26 +32,10 @@ interface TokenClaims {
 }
 
 async function verifyToken(token: string, secret: string): Promise<TokenClaims | null> {
-  try {
-    const [payloadStr, sigStr] = token.split('.');
-    if (!payloadStr || !sigStr) return null;
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-    const sigBytes = Uint8Array.from(atob(sigStr), (c) => c.charCodeAt(0));
-    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(payloadStr));
-    if (!valid) return null;
-    const payload = JSON.parse(atob(payloadStr));
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return { accountId: payload.sub, sessionId: payload.sid ?? null };
-  } catch {
-    return null;
-  }
+  const payload = await readToken(token, secret);
+  // Admin tokens carry a role and no account: they must never pass as a sid-less legacy account token.
+  if (!payload || payload.role || typeof payload.sub !== 'string') return null;
+  return { accountId: payload.sub, sessionId: payload.sid ?? null };
 }
 
 /** Writing last-seen on every request would cost a D1 write per call; once every few minutes is enough for a device list. */
@@ -93,32 +61,7 @@ function cleanLabel(value: unknown, fallback: string): string {
   return text || fallback;
 }
 
-type LogePlan = 'free' | 'pro' | 'ultra';
 type SessionKind = 'tv' | 'browser';
-
-interface PlanLimits {
-  maxProfiles: number;
-  maxAddons: number;
-  maxTVSessions: number;
-  maxBrowserSessions: number;
-  cloudSync: boolean;
-  canRenameDevices: boolean;
-}
-
-function limitsFor(plan: LogePlan): PlanLimits {
-  switch (plan) {
-    case 'pro':
-      return { maxProfiles: 3, maxAddons: 5, maxTVSessions: 2, maxBrowserSessions: 1, cloudSync: true, canRenameDevices: true };
-    case 'ultra':
-      return { maxProfiles: 6, maxAddons: 20, maxTVSessions: 4, maxBrowserSessions: 2, cloudSync: true, canRenameDevices: true };
-    default:
-      return { maxProfiles: 1, maxAddons: 1, maxTVSessions: 1, maxBrowserSessions: 1, cloudSync: false, canRenameDevices: false };
-  }
-}
-
-function parsePlan(value: unknown): LogePlan {
-  return value === 'pro' || value === 'ultra' ? value : 'free';
-}
 
 function rankPlan(plan: LogePlan): number {
   switch (plan) {
@@ -270,11 +213,8 @@ async function accountPlan(env: Env, accountId: string): Promise<{ plan: LogePla
   const row: any = await env.DB.prepare(
     'SELECT plan, plan_expires_at_ms FROM accounts WHERE id = ?'
   ).bind(accountId).first();
-  let plan = parsePlan(row?.plan);
   const expiresAtMs = typeof row?.plan_expires_at_ms === 'number' ? row.plan_expires_at_ms : null;
-  if (expiresAtMs != null && expiresAtMs > 0 && expiresAtMs < Date.now()) {
-    plan = 'free';
-  }
+  const plan = effectivePlan(row?.plan, expiresAtMs);
   return { plan, limits: limitsFor(plan), expiresAtMs };
 }
 
@@ -434,14 +374,15 @@ async function deleteProfileEverywhere(env: Env, accountId: string, profileId: s
   ]);
 }
 
-function json(data: any, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
+function htmlPage(body: string): Response {
+  return new Response(body, {
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Name, X-Device-Model',
+      'Content-Type': 'text/html; charset=utf-8',
+      // Corporate proxies / Safari otherwise keep serving a stale foyer page after deploy.
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
     },
   });
 }
@@ -462,15 +403,15 @@ export default {
 
     // MARK: - Web Companion Interface (HTML pour iPhone/Mac lors du scan QR)
     if (url.pathname === '/' || url.pathname === '/pair') {
-      const codeParam = url.searchParams.get('code') || '';
-      return new Response(renderWebPortal(codeParam), {
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          // Corporate proxies / Safari otherwise keep serving a stale foyer page after deploy.
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'Pragma': 'no-cache',
-        },
-      });
+      return htmlPage(renderWebPortal(url.searchParams.get('code') || ''));
+    }
+
+    // MARK: - Admin console (HTML) and its API
+    if (url.pathname === '/admin') {
+      return htmlPage(renderAdminPortal());
+    }
+    if (url.pathname.startsWith('/api/admin/')) {
+      return handleAdminApi(request, env, url);
     }
 
     if (url.pathname === '/privacy') {
@@ -492,7 +433,7 @@ export default {
     // MARK: - POST /api/auth/register
     if (url.pathname === '/api/auth/register' && request.method === 'POST') {
       const { email, password, deviceName, deviceModel, clientKind } = (await request.json()) as any;
-      if (!email || !password || password.length < 6) {
+      if (!email || !password || password.length < MIN_PASSWORD_LENGTH) {
         return json({ error: 'Email invalide ou mot de passe trop court (6 car. min).' }, 400);
       }
       const existing = await env.DB.prepare('SELECT id FROM accounts WHERE email = ?').bind(email.toLowerCase()).first();
@@ -661,7 +602,7 @@ export default {
       if (!currentPassword || !newPassword) {
         return json({ error: 'Veuillez renseigner tous les champs de mot de passe.' }, 400);
       }
-      if (newPassword.length < 6) {
+      if (newPassword.length < MIN_PASSWORD_LENGTH) {
         return json({ error: 'Le nouveau mot de passe doit comporter au moins 6 caractères.' }, 400);
       }
 

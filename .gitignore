@@ -29,3 +29,4 @@ Vendor/
 node_modules/
 .wrangler/
 .asc/
+.dev.vars
