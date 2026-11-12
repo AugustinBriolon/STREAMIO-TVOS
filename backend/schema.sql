@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     email TEXT UNIQUE NOT NULL,
     nickname TEXT,
     password_hash TEXT NOT NULL,
+    plan TEXT NOT NULL DEFAULT 'free', -- free | pro | ultra
+    plan_expires_at_ms INTEGER,
+    plan_product_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -75,6 +78,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     account_id TEXT NOT NULL,
     device_name TEXT NOT NULL,
     device_model TEXT,
+    device_kind TEXT NOT NULL DEFAULT 'tv', -- tv | browser
+    display_name TEXT,
     created_at_ms INTEGER NOT NULL,
     last_seen_at_ms INTEGER NOT NULL,
     revoked_at_ms INTEGER,
@@ -82,6 +87,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS sessions_by_account ON sessions (account_id, revoked_at_ms);
+CREATE INDEX IF NOT EXISTS sessions_by_account_kind ON sessions (account_id, device_kind, revoked_at_ms);
 
 -- Addons / extensions configurés
 CREATE TABLE IF NOT EXISTS addons (
