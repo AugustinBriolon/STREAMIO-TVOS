@@ -179,8 +179,11 @@ const body = `
       <section data-view="extensions" hidden>
         <div class="view-head"><h1 class="title-xl">Extensions</h1><p class="muted">Les addons Stremio installés sur toutes vos Apple TV.</p></div>
         <form id="addon-form" class="card form-stack">
-          <label class="field"><span>URL du manifeste</span><input id="addon-url" type="url" inputmode="url" placeholder="https://…/manifest.json" autocomplete="off" spellcheck="false" required></label>
-          <div class="card-head" style="margin:0"><span class="faint num" id="addon-caption"></span><button class="btn btn-primary" type="submit">${icon('plus')}Ajouter</button></div>
+          <div class="inline-form">
+            <label class="field"><span>URL du manifeste</span><input id="addon-url" type="url" inputmode="url" placeholder="https://…/manifest.json" autocomplete="off" spellcheck="false" required></label>
+            <button class="btn btn-primary" type="submit">${icon('plus')}Ajouter</button>
+          </div>
+          <p class="faint num" id="addon-caption"></p>
         </form>
         <div class="list" id="addon-list" style="margin-top:16px"></div>
       </section>
@@ -391,6 +394,26 @@ function renderAddons() {
   }).join('') : '<p class="empty">Aucune extension. Ajoutez l’URL d’un addon Stremio.</p>';
 }
 
+function deviceActions(d, lim) {
+  var items = [];
+  if (lim.canRenameDevices) {
+    items.push('<button class="menu-item" role="menuitem" data-rename-device="' + esc(d.id) + '">' + icon('pencil') + 'Renommer</button>');
+  }
+  if (!d.isCurrent) {
+    items.push('<button class="menu-item is-danger" role="menuitem" data-revoke-device="' + esc(d.id) + '">' + icon('logout') + 'Déconnecter</button>');
+  }
+  if (!items.length) return '';
+  if (items.length === 1 && !d.isCurrent && !lim.canRenameDevices) {
+    return '<button class="btn btn-sm btn-quiet" data-revoke-device="' + esc(d.id) + '">Déconnecter</button>';
+  }
+  if (items.length === 1 && lim.canRenameDevices && d.isCurrent) {
+    return '<button class="btn btn-icon" data-rename-device="' + esc(d.id) + '" aria-label="Renommer ' + esc(d.name) + '">' + icon('pencil') + '</button>';
+  }
+  return '<div class="menu">' +
+    '<button class="btn btn-icon" type="button" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="Actions pour ' + esc(d.name) + '">' + icon('more') + '</button>' +
+    '<div class="menu-pop" role="menu" hidden>' + items.join('') + '</div></div>';
+}
+
 function renderDevices() {
   var lim = limits();
   var groups = [
@@ -403,8 +426,7 @@ function renderDevices() {
       var sub = [d.model, d.isCurrent ? null : 'actif ' + relativeTime(d.lastSeenAtMs)].filter(Boolean).join(' · ');
       return '<div class="row"><span class="glyph">' + icon(g.glyph) + '</span><div class="row-main"><div class="row-title">' + esc(d.name) +
         (d.isCurrent ? ' <span class="tag">Cet appareil</span>' : '') + '</div><div class="row-sub">' + esc(sub) + '</div></div><div class="row-actions">' +
-        (lim.canRenameDevices ? '<button class="btn btn-icon" data-rename-device="' + esc(d.id) + '" aria-label="Renommer ' + esc(d.name) + '">' + icon('pencil') + '</button>' : '') +
-        (d.isCurrent ? '' : '<button class="btn btn-sm btn-quiet" data-revoke-device="' + esc(d.id) + '">Déconnecter</button>') + '</div></div>';
+        deviceActions(d, lim) + '</div></div>';
     }).join('');
     return '<div class="group-label"><span class="eyebrow">' + g.label + '</span><span class="faint num">' + list.length + ' / ' + g.max + '</span></div>' +
       '<div class="list">' + (rows || '<p class="empty">Aucun appareil.</p>') + '</div>';
@@ -572,6 +594,7 @@ $('#device-groups').addEventListener('click', function (e) {
   var revoke = e.target.closest('[data-revoke-device]');
   var rename = e.target.closest('[data-rename-device]');
   if (revoke) {
+    closeMenus();
     var device = state.devices.find(function (d) { return d.id === revoke.dataset.revokeDevice; });
     confirmAction({ title: 'Déconnecter « ' + device.name + ' » ?', body: 'Il faudra l’associer à nouveau pour l’utiliser.', confirmLabel: 'Déconnecter', danger: true })
       .then(function (ok) {
@@ -584,6 +607,7 @@ $('#device-groups').addEventListener('click', function (e) {
       });
   }
   if (rename) {
+    closeMenus();
     var target = state.devices.find(function (d) { return d.id === rename.dataset.renameDevice; });
     state.renamingDeviceId = target.id;
     $('#rename-input').value = target.name;

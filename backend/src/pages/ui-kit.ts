@@ -23,6 +23,7 @@ export const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>',
+  more: '<circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/>',
   spark: '<path d="M12 3.5l2 5.5 5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l2.5 2.5"/>',
 };
@@ -96,7 +97,8 @@ a { color: inherit; }
 }
 .btn:not(:disabled):active { scale: 0.96; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: #fff; }
+/* Primary mirrors TV PillButtonStyle: solid white, not brand red (red = brand/danger). */
+.btn-primary { background: #fff; color: #141414; }
 .btn-quiet { background: transparent; color: var(--text-2); }
 .btn-danger { background: rgb(255 90 82 / 0.12); color: var(--danger); }
 .btn-sm { min-height: 36px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
@@ -104,7 +106,7 @@ a { color: inherit; }
 .btn-block { width: 100%; }
 @media (hover: hover) {
   .btn:not(:disabled):hover { background: #2e2e32; }
-  .btn-primary:not(:disabled):hover { background: var(--accent-press); }
+  .btn-primary:not(:disabled):hover { background: #e8e8ed; }
   .btn-quiet:not(:disabled):hover, .btn-icon:not(:disabled):hover { background: rgb(255 255 255 / 0.06); color: var(--text); }
   .btn-danger:not(:disabled):hover { background: rgb(255 90 82 / 0.2); }
 }
@@ -124,10 +126,32 @@ a { color: inherit; }
 }
 .field input::placeholder { color: var(--text-3); }
 .field input:focus { border-color: rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.07); outline: none; }
-.inline-form { display: flex; gap: 8px; }
-.inline-form .field { flex: 1; }
+.inline-form { display: flex; gap: 8px; align-items: end; }
+.inline-form .field { flex: 1; min-width: 0; }
 .form-stack { display: grid; gap: 14px; }
 .form-error { color: var(--danger); font-size: 14px; }
+
+/* Row overflow menu: one quiet trigger, actions stay secondary/destructive. */
+.menu { position: relative; }
+.menu-pop {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; min-width: 180px;
+  padding: 6px; border-radius: 12px; background: #2c2c30; box-shadow: var(--shadow-pop);
+  display: grid; gap: 2px;
+}
+.menu-pop[hidden] { display: none !important; }
+.menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 12px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-weight: 500;
+  text-align: left; cursor: pointer;
+}
+.menu-item .icon { width: 18px; height: 18px; color: var(--text-2); }
+.menu-item.is-danger { color: var(--danger); }
+.menu-item.is-danger .icon { color: var(--danger); }
+@media (hover: hover) {
+  .menu-item:hover { background: rgb(255 255 255 / 0.08); }
+  .menu-item.is-danger:hover { background: rgb(255 90 82 / 0.14); }
+}
+.menu-item:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 
 /* Surfaces */
 .card { background: var(--panel); border-radius: var(--r-lg); padding: 20px; }
@@ -279,7 +303,51 @@ document.addEventListener('click', function (event) {
   if (closer) closeDialog(closer.closest('dialog'));
   // A click on the backdrop lands on the dialog element itself.
   if (event.target.tagName === 'DIALOG') closeDialog(event.target);
+
+  var toggle = event.target.closest('[data-menu-toggle]');
+  if (toggle) {
+    var menu = toggle.closest('.menu');
+    var open = menu && menu.classList.contains('is-open');
+    closeMenus();
+    if (menu && !open) openMenu(menu);
+    return;
+  }
+  if (!event.target.closest('.menu')) closeMenus();
 });
+
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') closeMenus();
+});
+
+function openMenu(menu) {
+  var pop = menu.querySelector('.menu-pop');
+  var toggle = menu.querySelector('[data-menu-toggle]');
+  if (!pop || !toggle) return;
+  menu.classList.add('is-open');
+  pop.hidden = false;
+  toggle.setAttribute('aria-expanded', 'true');
+  // Fixed so overflow:hidden on .list does not clip the popover.
+  var rect = toggle.getBoundingClientRect();
+  pop.style.position = 'fixed';
+  pop.style.top = Math.round(rect.bottom + 4) + 'px';
+  pop.style.right = Math.round(window.innerWidth - rect.right) + 'px';
+  pop.style.left = 'auto';
+}
+
+function closeMenus() {
+  $all('.menu.is-open').forEach(function (menu) {
+    menu.classList.remove('is-open');
+    var pop = menu.querySelector('.menu-pop');
+    var toggle = menu.querySelector('[data-menu-toggle]');
+    if (pop) {
+      pop.hidden = true;
+      pop.style.top = '';
+      pop.style.right = '';
+      pop.style.position = '';
+    }
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  });
+}
 
 /**
  * Asks before a destructive action. With requireText, the confirm button stays
