@@ -53,8 +53,10 @@ const styles = String.raw`
   --r-md: 12px;
   --r-lg: 20px;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --shadow-pop: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 24px 48px -12px rgb(0 0 0 / 0.6);
+  --press-scale: 0.96;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
@@ -93,9 +95,9 @@ a { color: inherit; }
   min-height: 44px; padding: 0 18px; border-radius: var(--r-md);
   border: 1px solid transparent; cursor: pointer; font-weight: 600; font-size: 15px; white-space: nowrap; text-decoration: none;
   background: var(--panel-raised); color: var(--text);
-  transition: background-color 150ms ease, opacity 150ms ease, scale 150ms ease-out;
+  transition: background-color 150ms var(--ease-out), opacity 150ms var(--ease-out), scale 140ms var(--ease-out);
 }
-.btn:not(:disabled):active { scale: 0.96; }
+.btn:not(:disabled):active { scale: var(--press-scale); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 /* Primary mirrors TV PillButtonStyle: solid white, not brand red (red = brand/danger). */
 .btn-primary { background: #fff; color: #141414; }
@@ -104,7 +106,7 @@ a { color: inherit; }
 .btn-sm { min-height: 36px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
 .btn-icon { width: 40px; min-height: 40px; padding: 0; border-radius: 10px; background: transparent; color: var(--text-2); }
 .btn-block { width: 100%; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .btn:not(:disabled):hover { background: #2e2e32; }
   .btn-primary:not(:disabled):hover { background: #e8e8ed; }
   .btn-quiet:not(:disabled):hover, .btn-icon:not(:disabled):hover { background: rgb(255 255 255 / 0.06); color: var(--text); }
@@ -122,7 +124,7 @@ a { color: inherit; }
 .field input, .field select {
   min-height: 44px; width: 100%; padding: 0 14px; border-radius: var(--r-md);
   background: rgb(255 255 255 / 0.05); border: 1px solid var(--line-strong);
-  transition: border-color 150ms ease, background-color 150ms ease;
+  transition: border-color 150ms var(--ease-out), background-color 150ms var(--ease-out);
 }
 .field input::placeholder { color: var(--text-3); }
 .field input:focus { border-color: rgb(255 255 255 / 0.4); background: rgb(255 255 255 / 0.07); outline: none; }
@@ -131,25 +133,40 @@ a { color: inherit; }
 .form-stack { display: grid; gap: 14px; }
 .form-error { color: var(--danger); font-size: 14px; }
 
-/* Row overflow menu: one quiet trigger, actions stay secondary/destructive. */
+/* Row overflow menu: origin-aware popover, interruptible transitions (not keyframes). */
 .menu { position: relative; }
 .menu-pop {
   position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; min-width: 180px;
   padding: 6px; border-radius: 12px; background: #2c2c30; box-shadow: var(--shadow-pop);
-  display: grid; gap: 2px;
+  display: grid; gap: 2px; overscroll-behavior: contain;
+  transform-origin: top right;
+  opacity: 0; scale: 0.96; visibility: hidden; pointer-events: none;
+  transition:
+    opacity 160ms var(--ease-out),
+    scale 160ms var(--ease-out),
+    visibility 160ms;
 }
-.menu-pop[hidden] { display: none !important; }
+.menu.is-open .menu-pop {
+  opacity: 1; scale: 1; visibility: visible; pointer-events: auto;
+  transition-duration: 160ms, 160ms, 0ms;
+}
+.menu:not(.is-open) .menu-pop {
+  transition-duration: 110ms, 110ms, 110ms; /* exit snaps faster than enter */
+}
 /* Open menus escape .list clipping without fixed coords (fixed breaks under .view transforms). */
 .list:has(.menu.is-open) { overflow: visible; z-index: 4; }
 .menu-item {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 12px;
   border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-weight: 500;
   text-align: left; cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
 }
+.menu-item:active { background: rgb(255 255 255 / 0.1); }
 .menu-item .icon { width: 18px; height: 18px; color: var(--text-2); }
 .menu-item.is-danger { color: var(--danger); }
 .menu-item.is-danger .icon { color: var(--danger); }
-@media (hover: hover) {
+.menu-item.is-danger:active { background: rgb(255 90 82 / 0.18); }
+@media (hover: hover) and (pointer: fine) {
   .menu-item:hover { background: rgb(255 255 255 / 0.08); }
   .menu-item.is-danger:hover { background: rgb(255 90 82 / 0.14); }
 }
@@ -167,8 +184,8 @@ a { color: inherit; }
 .row-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-sub { font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-actions { display: flex; gap: 4px; flex: none; }
-.row-button { width: 100%; text-align: left; background: none; border: 0; cursor: pointer; transition: background-color 150ms ease; }
-@media (hover: hover) { .row-button:hover { background: rgb(255 255 255 / 0.03); } }
+.row-button { width: 100%; text-align: left; background: none; border: 0; cursor: pointer; transition: background-color 120ms var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .row-button:hover { background: rgb(255 255 255 / 0.03); } }
 .glyph { width: 40px; height: 40px; border-radius: 10px; background: rgb(255 255 255 / 0.06); display: grid; place-items: center; color: var(--text-2); flex: none; }
 .danger-zone { box-shadow: inset 0 0 0 1px rgb(255 90 82 / 0.25); background: transparent; }
 .empty { padding: 32px 20px; text-align: center; color: var(--text-3); font-size: 14px; }
@@ -181,11 +198,11 @@ a { color: inherit; }
 .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 16px 20px; }
 .meter-label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
 .meter-track { height: 4px; border-radius: 2px; background: rgb(255 255 255 / 0.08); overflow: hidden; }
-.meter-fill { height: 100%; border-radius: 2px; background: var(--text); transform-origin: left; transition: scale 400ms var(--ease-out); }
+.meter-fill { height: 100%; border-radius: 2px; background: var(--text); transform-origin: left; transition: scale 280ms var(--ease-out); }
 
 /* Segmented control */
 .seg { display: flex; padding: 3px; gap: 2px; background: rgb(255 255 255 / 0.06); border-radius: 11px; }
-.seg label { flex: 1; text-align: center; padding: 8px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--text-2); cursor: pointer; transition: background-color 150ms ease, color 150ms ease; }
+.seg label { flex: 1; text-align: center; padding: 8px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--text-2); cursor: pointer; transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out); }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label:has(input:checked) { background: var(--panel-raised); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 0.4); }
 
@@ -200,7 +217,7 @@ dialog.sheet {
 }
 dialog.sheet[open] { opacity: 1; transform: none; transition-duration: 200ms, 350ms, 350ms, 350ms; transition-timing-function: ease-out, var(--ease-drawer); }
 @starting-style { dialog.sheet[open] { opacity: 0; transform: translateY(100%); } }
-dialog.sheet::backdrop { background: rgb(0 0 0 / 0); transition: background-color 200ms ease, overlay 200ms allow-discrete, display 200ms allow-discrete; }
+dialog.sheet::backdrop { background: rgb(0 0 0 / 0); transition: background-color 180ms var(--ease-out), overlay 180ms allow-discrete, display 180ms allow-discrete; }
 dialog.sheet[open]::backdrop { background: rgb(0 0 0 / 0.6); }
 @starting-style { dialog.sheet[open]::backdrop { background: rgb(0 0 0 / 0); } }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; background: var(--panel); }
@@ -221,16 +238,16 @@ dialog.sheet[open]::backdrop { background: rgb(0 0 0 / 0.6); }
   translate: -50% 0; max-width: calc(100% - 32px); overflow: visible;
   display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 14px;
   background: #2c2c30; box-shadow: var(--shadow-pop); font-size: 14px; font-weight: 500;
-  opacity: 0; transform: translateY(12px); pointer-events: none;
-  transition: opacity 150ms ease-out, transform 150ms ease-out;
+  opacity: 0; transform: translateY(10px) scale(0.96); pointer-events: none;
+  transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
 }
-.toast.is-visible { opacity: 1; transform: none; transition-duration: 250ms; }
+.toast.is-visible { opacity: 1; transform: none; transition-duration: 200ms; }
 .toast[data-tone="error"] { color: #ffb4b0; }
 .toast[data-tone="success"] .icon { color: var(--ok); }
 
 /* View entrance: only on navigation, never on high-frequency actions. */
-.view { animation: view-in 250ms var(--ease-out) both; }
-@keyframes view-in { from { opacity: 0; transform: translateY(8px); } }
+.view { animation: view-in 220ms var(--ease-out) both; }
+@keyframes view-in { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {
   dialog.sheet, dialog.sheet[open], .toast, .toast.is-visible { transform: none !important; }
@@ -238,6 +255,9 @@ dialog.sheet[open]::backdrop { background: rgb(0 0 0 / 0.6); }
   .view { animation-name: view-fade; }
   .meter-fill { transition: none; }
   .btn:not(:disabled):active { scale: 1; }
+  .menu-pop, .menu.is-open .menu-pop, .menu:not(.is-open) .menu-pop {
+    scale: 1; transition: opacity 120ms var(--ease-out), visibility 120ms;
+  }
 }
 @keyframes view-fade { from { opacity: 0; } }
 `;
@@ -325,18 +345,33 @@ function openMenu(menu) {
   var pop = menu.querySelector('.menu-pop');
   var toggle = menu.querySelector('[data-menu-toggle]');
   if (!pop || !toggle) return;
-  menu.classList.add('is-open');
   pop.hidden = false;
-  toggle.setAttribute('aria-expanded', 'true');
+  pop.removeAttribute('aria-hidden');
+  // Double rAF so the closed styles paint before .is-open transitions in.
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      menu.classList.add('is-open');
+      toggle.setAttribute('aria-expanded', 'true');
+    });
+  });
 }
 
 function closeMenus() {
   $all('.menu.is-open').forEach(function (menu) {
-    menu.classList.remove('is-open');
     var pop = menu.querySelector('.menu-pop');
     var toggle = menu.querySelector('[data-menu-toggle]');
-    if (pop) pop.hidden = true;
+    menu.classList.remove('is-open');
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    if (!pop) return;
+    pop.setAttribute('aria-hidden', 'true');
+    var done = false;
+    var finish = function () {
+      if (done || menu.classList.contains('is-open')) return;
+      done = true;
+      pop.hidden = true;
+    };
+    pop.addEventListener('transitionend', finish, { once: true });
+    setTimeout(finish, 180);
   });
 }
 
