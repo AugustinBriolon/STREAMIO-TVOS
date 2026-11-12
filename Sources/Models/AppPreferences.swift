@@ -57,7 +57,7 @@ public final class AppPreferences {
     }
 
     /// Clé API TMDB (v3) injectée au build via `Config/Secrets.xcconfig` → Info.plist (`TMDBApiKey`).
-    public static var tmdbApiKey: String {
+    public nonisolated static var tmdbApiKey: String {
         (Bundle.main.object(forInfoDictionaryKey: "TMDBApiKey") as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
