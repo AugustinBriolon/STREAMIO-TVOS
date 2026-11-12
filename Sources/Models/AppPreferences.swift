@@ -56,8 +56,11 @@ public final class AppPreferences {
         static let tmdbApiKey = "app.preferences.tmdbApiKey"
     }
 
-    /// Clé API TMDB (v3) configurée en back pour les métadonnées multilingues et le casting complet.
-    public static let tmdbApiKey = "4e44d9029b1270a757cddc766a1bcb63"
+    /// Clé API TMDB (v3) injectée au build via `Config/Secrets.xcconfig` → Info.plist (`TMDBApiKey`).
+    public static var tmdbApiKey: String {
+        (Bundle.main.object(forInfoDictionaryKey: "TMDBApiKey") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
 
     private let defaults: UserDefaults
 

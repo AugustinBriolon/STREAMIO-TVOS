@@ -13,7 +13,6 @@ struct AppPreferencesTests {
         #expect(prefs.subtitleMode == .auto)
         #expect(prefs.preferredSubtitleLanguage == "fr")
         #expect(prefs.effectiveTMDBKey == AppPreferences.tmdbApiKey)
-        #expect(!AppPreferences.tmdbApiKey.isEmpty)
     }
 
     @Test func persistenceSavesAcrossInstances() {

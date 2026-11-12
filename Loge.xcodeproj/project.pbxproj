@@ -185,6 +185,7 @@
 		15E98C3050F558F3B3088D9E /* TopShelfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopShelfTests.swift; sourceTree = "<group>"; };
 		1C8AA7F14E8B26798D1F4585 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Vendor/TVVLCKit.xcframework; sourceTree = "<group>"; };
 		2628826F7DAFEF0C6859C16E /* ViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModelTests.swift; sourceTree = "<group>"; };
+		276CC74939B0A47AD171E838 /* Build.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Build.xcconfig; sourceTree = "<group>"; };
 		28B5C4F7F47CB0A39CF8A9F1 /* TrackSelectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackSelectorTests.swift; sourceTree = "<group>"; };
 		2D99A73F4F98BC8450FFAD12 /* LogeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LogeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		309050E72F0E3FAACC19964C /* PlaybackProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackProbe.swift; sourceTree = "<group>"; };
@@ -374,6 +375,7 @@
 		1F66E2BC11407F04717849DA = {
 			isa = PBXGroup;
 			children = (
+				2A7E6E212BD2D414ADE1DC0F /* Config */,
 				C492C9883BDEF71D37753DCA /* Sources */,
 				796C2C7019B42429079487F5 /* Tests */,
 				4F133851CD6CF7444A404F90 /* TopShelf */,
@@ -397,6 +399,14 @@
 				B153C71C96490379F1262372 /* Components */,
 			);
 			path = Design;
+			sourceTree = "<group>";
+		};
+		2A7E6E212BD2D414ADE1DC0F /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				276CC74939B0A47AD171E838 /* Build.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		2B4D2921F654B3D83C6B62F7 /* MyList */ = {
@@ -926,6 +936,7 @@
 		};
 		3CCA902625523D1E84DBA961 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 276CC74939B0A47AD171E838 /* Build.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -987,11 +998,13 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				TMDB_API_KEY = "";
 			};
 			name = Debug;
 		};
 		6E2174D3D883377C05840185 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 276CC74939B0A47AD171E838 /* Build.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -1046,6 +1059,7 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+				TMDB_API_KEY = "";
 			};
 			name = Release;
 		};

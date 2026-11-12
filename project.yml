@@ -1,6 +1,9 @@
 name: Loge
 options:
   bundleIdPrefix: com.h6245
+configFiles:
+  Debug: Config/Build.xcconfig
+  Release: Config/Build.xcconfig
 settings:
   base:
     DEVELOPMENT_TEAM: 6X5CP5SFAG
@@ -9,6 +12,8 @@ settings:
     # One build number for the app and its extension; release-testflight.sh overrides it (ADR 0022).
     CURRENT_PROJECT_VERSION: 1
     DEVELOPMENT_LANGUAGE: fr
+    # Overridden by Config/Secrets.xcconfig (gitignored). Empty = TMDB enrichment disabled.
+    TMDB_API_KEY: ""
 targets:
   Loge:
     type: application
@@ -33,6 +38,7 @@ targets:
         UIRequiredDeviceCapabilities: [arm64]
         # loge://play?id=... opens the app from the Top Shelf (ADR 0015).
         CFBundleDisplayName: Loge
+        TMDBApiKey: $(TMDB_API_KEY)
         CFBundleURLTypes:
           - CFBundleURLName: com.h6245.loge.link
             CFBundleURLSchemes: [loge]

@@ -290,7 +290,7 @@ public struct StremioService: StremioProviding {
         var canonicalID = id
         if id.hasPrefix("tmdb:") {
             let tmdbRaw = String(id.dropFirst(5))
-            let apiKey = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+            let apiKey = await AppPreferences.shared.effectiveTMDBKey
             if let tmdbInt = Int(tmdbRaw),
                let resolved = await tmdbService.fetchExternalIMDbID(tmdbID: tmdbInt, type: type, apiKey: apiKey) {
                 canonicalID = resolved
@@ -312,42 +312,42 @@ public struct StremioService: StremioProviding {
     }
 
     public func fetchPerson(personID: Int, language: String) async -> PersonDetail? {
-        let apiKey = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let apiKey = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchPersonDetails(personID: personID, language: language, apiKey: apiKey)
     }
 
     public func fetchNowPlaying(language: String, region: String = "FR") async -> [MediaItem] {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchNowPlayingMovies(language: language, region: region, apiKey: key)
     }
 
     public func fetchTrending(type: MediaType, period: String = "week", language: String) async -> [MediaItem] {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchTrending(type: type, period: period, language: language, apiKey: key)
     }
 
     public func fetchByWatchProvider(type: MediaType, providerID: Int, language: String, region: String = "FR") async -> [MediaItem] {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchByWatchProvider(type: type, providerID: providerID, language: language, region: region, apiKey: key)
     }
 
     public func fetchByCompany(companyID: Int, language: String) async -> [MediaItem] {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchByCompany(companyID: companyID, language: language, apiKey: key)
     }
 
     public func fetchByNetwork(networkID: Int, language: String) async -> [MediaItem] {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchByNetwork(networkID: networkID, language: language, apiKey: key)
     }
 
     public func fetchCollection(collectionID: Int, language: String) async -> SagaCollection? {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchCollection(collectionID: collectionID, language: language, apiKey: key)
     }
 
     public func fetchCuratedTitles(tmdbIDs: [Int], type: MediaType, language: String) async -> [MediaItem] {
-        let key = await AppPreferences.shared.effectiveTMDBKey ?? AppPreferences.tmdbApiKey
+        let key = await AppPreferences.shared.effectiveTMDBKey
         return await tmdbService.fetchCuratedTitles(tmdbIDs: tmdbIDs, type: type, language: language, apiKey: key)
     }
 

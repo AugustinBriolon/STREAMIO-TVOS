@@ -12,6 +12,9 @@ project.xcworkspace/xcuserdata/
 *.dSYM
 xcuserdata/
 
+# Build-time secrets (copy from Secrets.xcconfig.example)
+Config/Secrets.xcconfig
+
 # XcodeGen
 # Uncomment if you prefer generating the xcodeproj on demand:
 # *.xcodeproj
