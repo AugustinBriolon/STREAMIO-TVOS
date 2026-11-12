@@ -505,7 +505,7 @@ struct SettingsView: View {
         let included = addons.includedURLs
 
         return VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("Loge ne fournit aucun flux. Les inclus sont toujours là (on/off). Seules les installées comptent dans l’offre et se suppriment.")
+            Text("Loge ne fournit aucun flux. Les inclus sont toujours là (on/off par profil). Seules les installées comptent dans l’offre et se suppriment (foyer entier).")
                 .font(Theme.Typography.caption)
                 .foregroundStyle(Theme.Palette.textSecondary)
 

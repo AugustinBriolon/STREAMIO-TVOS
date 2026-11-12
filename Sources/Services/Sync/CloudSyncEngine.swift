@@ -140,6 +140,7 @@ public final class CloudSyncEngine {
             if !parsedProfiles.isEmpty, profiles.shouldAdoptAccountProfiles, localLibraryEmpty {
                 profiles.adoptRemote(parsedProfiles)
                 library.switchProfile(to: profiles.activeID)
+                addons.switchProfile(to: profiles.activeID)
             } else if !parsedProfiles.isEmpty {
                 profiles.mergeProfiles(parsedProfiles)
             }

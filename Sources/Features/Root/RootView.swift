@@ -44,6 +44,7 @@ struct RootView: View {
     @Environment(PlaybackCoordinator.self) private var playback
     @Environment(ProfileStore.self) private var profiles
     @Environment(LibraryStore.self) private var library
+    @Environment(AddonStore.self) private var addons
     @Environment(CloudSyncEngine.self) private var syncEngine
     @Environment(AuthService.self) private var auth
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -103,6 +104,7 @@ struct RootView: View {
         // Each profile has its own list and progress: follow the active one.
         .onChange(of: profiles.activeID) { _, id in
             library.switchProfile(to: id)
+            addons.switchProfile(to: id)
             TopShelfRefresher.refresh()
             syncEngine.triggerPushDebounced()
         }

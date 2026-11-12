@@ -94,8 +94,9 @@ struct AddonStoreTests {
     @Test func toggleDisablesWithoutRemoving() {
         let suite = "tests.addons.disabled.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
+        let profile = UUID()
         let storage = InMemorySecretStorage(AddonStore.defaultAddonURLs)
-        let store = AddonStore(storage: storage, legacyDefaults: makeDefaults(), defaults: defaults)
+        let store = AddonStore(storage: storage, legacyDefaults: makeDefaults(), defaults: defaults, profileID: profile)
         let youtube = AddonStore.defaultAddonURLs[0]
         #expect(store.isEnabled(youtube))
         #expect(store.activeURLs.count == 2)
@@ -103,8 +104,39 @@ struct AddonStoreTests {
         #expect(!store.isEnabled(youtube))
         #expect(store.urls.contains(youtube))
         #expect(store.activeURLs == [AddonStore.defaultAddonURLs[1]])
-        let reloaded = AddonStore(storage: storage, legacyDefaults: makeDefaults(), defaults: defaults)
+        let reloaded = AddonStore(storage: storage, legacyDefaults: makeDefaults(), defaults: defaults, profileID: profile)
         #expect(!reloaded.isEnabled(youtube))
+    }
+
+    @Test func enableDisableIsPerProfile() {
+        let suite = "tests.addons.disabled.profiles.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let storage = InMemorySecretStorage(AddonStore.defaultAddonURLs)
+        let a = UUID()
+        let b = UUID()
+        let store = AddonStore(storage: storage, legacyDefaults: makeDefaults(), defaults: defaults, profileID: a)
+        let youtube = AddonStore.defaultAddonURLs[0]
+        store.toggle(youtube)
+        #expect(!store.isEnabled(youtube))
+        store.switchProfile(to: b)
+        #expect(store.isEnabled(youtube))
+        store.switchProfile(to: a)
+        #expect(!store.isEnabled(youtube))
+    }
+
+    @Test func migratesLegacyDisabledIntoFirstProfileOnly() {
+        let suite = "tests.addons.disabled.legacy.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let youtube = AddonStore.defaultAddonURLs[0]
+        defaults.set([youtube], forKey: AddonStore.disabledKey)
+        let storage = InMemorySecretStorage(AddonStore.defaultAddonURLs)
+        let a = UUID()
+        let b = UUID()
+        let first = AddonStore(storage: storage, legacyDefaults: makeDefaults(), defaults: defaults, profileID: a)
+        #expect(!first.isEnabled(youtube))
+        #expect(defaults.stringArray(forKey: AddonStore.disabledKey) == nil)
+        first.switchProfile(to: b)
+        #expect(first.isEnabled(youtube))
     }
 
     @Test func includedVersusInstallableAndDefaultsNotRemovable() {

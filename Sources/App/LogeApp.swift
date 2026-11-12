@@ -23,7 +23,7 @@ struct LogeApp: App {
         let profiles = ProfileStore()
         let library = LibraryStore(profileID: profiles.activeID)
         _profiles = State(initialValue: profiles)
-        let addons = AddonStore()
+        let addons = AddonStore(profileID: profiles.activeID)
         _library = State(initialValue: library)
         _addons = State(initialValue: addons)
         _playback = State(initialValue: PlaybackCoordinator(service: StremioService(), addons: addons, library: library))

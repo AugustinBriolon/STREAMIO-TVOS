@@ -55,15 +55,19 @@ public struct KeychainSecretStorage: SecretStorage {
 @Observable
 public final class AddonStore {
     public private(set) var urls: [String]
-    /// Bases désactivées (toujours listées, ignorées à la lecture).
+    /// Bases désactivées pour le profil courant (toujours listées, ignorées à la lecture).
     public private(set) var disabledURLs: Set<String>
+    /// Who-is-watching: on/off is per profile; install/remove stays household-wide.
+    public private(set) var profileID: UUID
 
     private let storage: SecretStorage
     private let defaults: UserDefaults
 
     static let legacyListKey = "user_addon_urls_v2"
     static let legacySingleKey = "user_addon_url"
+    /// Pre-per-profile flat list; migrated into `disabledByProfileKey` on first load for a profile.
     static let disabledKey = "addon_disabled_urls"
+    static let disabledByProfileKey = "addon_disabled_urls_by_profile"
 
     /// Official Stremio baselines restored on first launch / logout. Not counted toward the plan addon cap.
     public static let defaultAddonURLs: [String] = [
@@ -99,10 +103,12 @@ public final class AddonStore {
     public init(
         storage: SecretStorage = KeychainSecretStorage(),
         legacyDefaults: UserDefaults = .standard,
-        defaults: UserDefaults = AppGroup.defaults
+        defaults: UserDefaults = AppGroup.defaults,
+        profileID: UUID = UUID()
     ) {
         self.storage = storage
         self.defaults = defaults
+        self.profileID = profileID
         let loaded: [String]
         if let stored = storage.load() {
             loaded = stored
@@ -116,8 +122,14 @@ public final class AddonStore {
             }
         }
         self.urls = loaded
-        let rawDisabled = defaults.stringArray(forKey: Self.disabledKey) ?? []
-        self.disabledURLs = Set(rawDisabled.map(Self.cleanURL).filter { !$0.isEmpty && loaded.contains($0) })
+        self.disabledURLs = Self.loadDisabled(for: profileID, urls: loaded, defaults: defaults)
+    }
+
+    /// Same pattern as `LibraryStore.switchProfile`: reload this profile's enable/disable set.
+    public func switchProfile(to id: UUID) {
+        guard id != profileID else { return }
+        profileID = id
+        disabledURLs = Self.loadDisabled(for: id, urls: urls, defaults: defaults)
     }
 
     /// Moves pre-2.0 plaintext URLs into the Keychain; legacy keys are erased only once the Keychain write succeeds.
@@ -177,7 +189,8 @@ public final class AddonStore {
         plan = .free
         disabledURLs = []
         storage.save(urls)
-        persistDisabled()
+        defaults.removeObject(forKey: Self.disabledByProfileKey)
+        defaults.removeObject(forKey: Self.disabledKey)
     }
 
     nonisolated public static func isDefaultAddonURL(_ url: String) -> Bool {
@@ -193,7 +206,28 @@ public final class AddonStore {
     }
 
     private func persistDisabled() {
-        defaults.set(Array(disabledURLs).sorted(), forKey: Self.disabledKey)
+        var map = defaults.dictionary(forKey: Self.disabledByProfileKey) as? [String: [String]] ?? [:]
+        map[profileID.uuidString] = Array(disabledURLs).sorted()
+        defaults.set(map, forKey: Self.disabledByProfileKey)
+        defaults.removeObject(forKey: Self.disabledKey)
+    }
+
+    private static func loadDisabled(for profileID: UUID, urls: [String], defaults: UserDefaults) -> Set<String> {
+        let key = profileID.uuidString
+        var map = defaults.dictionary(forKey: disabledByProfileKey) as? [String: [String]] ?? [:]
+        if let stored = map[key] {
+            return Set(stored.map(cleanURL).filter { !$0.isEmpty && urls.contains($0) })
+        }
+        // shortcut: first profile after upgrade inherits the old device-wide set; others start all-on
+        // when to upgrade: sync disabled sets per profile via cloud if multi-TV households need it
+        if let legacy = defaults.stringArray(forKey: disabledKey) {
+            let set = Set(legacy.map(cleanURL).filter { !$0.isEmpty && urls.contains($0) })
+            map[key] = Array(set).sorted()
+            defaults.set(map, forKey: disabledByProfileKey)
+            defaults.removeObject(forKey: disabledKey)
+            return set
+        }
+        return []
     }
 
     /// Accepts a manifest URL or a base URL; returns the base URL without trailing slash.
