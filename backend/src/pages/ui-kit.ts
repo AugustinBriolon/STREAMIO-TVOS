@@ -139,6 +139,8 @@ a { color: inherit; }
   display: grid; gap: 2px;
 }
 .menu-pop[hidden] { display: none !important; }
+/* Open menus escape .list clipping without fixed coords (fixed breaks under .view transforms). */
+.list:has(.menu.is-open) { overflow: visible; z-index: 4; }
 .menu-item {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 0 12px;
   border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-weight: 500;
@@ -158,7 +160,7 @@ a { color: inherit; }
 .card + .card, .stack > * + * { margin-top: 16px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .card-head p { margin-top: 2px; }
-.list { background: var(--panel); border-radius: var(--r-lg); overflow: hidden; }
+.list { position: relative; background: var(--panel); border-radius: var(--r-lg); overflow: hidden; }
 .row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; min-height: 64px; }
 .row + .row { box-shadow: 0 -1px 0 var(--line); }
 .row-main { flex: 1; min-width: 0; }
@@ -326,12 +328,6 @@ function openMenu(menu) {
   menu.classList.add('is-open');
   pop.hidden = false;
   toggle.setAttribute('aria-expanded', 'true');
-  // Fixed so overflow:hidden on .list does not clip the popover.
-  var rect = toggle.getBoundingClientRect();
-  pop.style.position = 'fixed';
-  pop.style.top = Math.round(rect.bottom + 4) + 'px';
-  pop.style.right = Math.round(window.innerWidth - rect.right) + 'px';
-  pop.style.left = 'auto';
 }
 
 function closeMenus() {
@@ -339,12 +335,7 @@ function closeMenus() {
     menu.classList.remove('is-open');
     var pop = menu.querySelector('.menu-pop');
     var toggle = menu.querySelector('[data-menu-toggle]');
-    if (pop) {
-      pop.hidden = true;
-      pop.style.top = '';
-      pop.style.right = '';
-      pop.style.position = '';
-    }
+    if (pop) pop.hidden = true;
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
   });
 }
