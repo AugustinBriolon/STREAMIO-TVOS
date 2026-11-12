@@ -12,8 +12,6 @@ settings:
     # One build number for the app and its extension; release-testflight.sh overrides it (ADR 0022).
     CURRENT_PROJECT_VERSION: 1
     DEVELOPMENT_LANGUAGE: fr
-    # Overridden by Config/Secrets.xcconfig (gitignored). Empty = TMDB enrichment disabled.
-    TMDB_API_KEY: ""
 targets:
   Loge:
     type: application

@@ -1,2 +1,5 @@
 // Optional local secrets (copy Secrets.xcconfig.example → Secrets.xcconfig).
+// Include AFTER any default so Secrets wins; do not also set TMDB_API_KEY in project.yml
+// or the empty pbxproj value overrides this file.
+TMDB_API_KEY =
 #include? "Secrets.xcconfig"
